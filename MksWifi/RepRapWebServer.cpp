@@ -231,7 +231,9 @@ void RepRapWebServer::_prepareHeader(String& response, int code, const char* con
     response += String(code);
     response += " ";
     response += _responseCodeToString(code);
-    response += "\r\nCache-Control: no-cache, no-store, must-revalidate\r\nPragma: no-cache\r\nExpires: 0\r\n";
+    response += "\r\n";
+    // QQS-Pro: only when the handler did not set its own (images are cached a day, see fsHandler)
+    if (_responseHeaders.indexOf("Cache-Control:") < 0) response += "Cache-Control: no-cache, no-store, must-revalidate\r\nPragma: no-cache\r\nExpires: 0\r\n";
 
     if (!content_type)
     {

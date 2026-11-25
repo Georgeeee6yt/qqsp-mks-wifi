@@ -15,6 +15,14 @@ First commit = the published source unchanged; later commits = QQS-Pro changes (
 - QQS1.1: the 5 s status poll also sends `M2012` (Marlin QQS v3.2.13+). Its reply lines `QQS s=… p=… …` and
   `QQSN <file name>` are kept (not passed on) and returned by `/status` as `pr`, `pn` and `age` (ms since the last
   `QQS` line, -1 = never: older board firmware). While a page asks for `/status` (last 30 s) the poll runs every 2 s.
+- QQS1.2: the board's `QQS…` reply lines are taken in `transfer_msg_handle` before anything else (one line per
+  packet, up to 1 KB, not passed on to TCP clients). `GET /files?go=1&d=<hex 8.3 path>` sends `M2013 H<hex>`;
+  `GET /files` returns `{"st":"wait"|"ok"|"timeout"|"busy", "d", "code", "total", "got", "f":[[dir,size,"hex 8.3",
+  "UTF-8 name"],…]}` (list kept up to ~8 KB, streamed). `GET /print?go=1&f=<hex 8.3 path>` sends `M2014 H<hex>`;
+  `GET /print` returns `{"r":code,"ms":age}` (-1 = no answer yet). G-code to the board for these goes in the
+  "important" queue so the status poll cannot overwrite it. `/status` also gives `heap`.
+- QQS1.2: `RepRapWebServer::_prepareHeader` adds its no-cache headers only when the handler set no Cache-Control
+  (in QQS1.1 the image cache header was overridden by them).
 - QQS1.1: `.gif` served as `image/gif`, `.png` as `image/png`; images get `Cache-Control: max-age=86400`.
 - `data/index.htm`: the page (printer card with the printer's animation, G-code upload with progress to
   `/upload?X-Filename=`, Wi-Fi scan / connect / hotspot).

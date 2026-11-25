@@ -20,7 +20,7 @@ extern "C" {
 #include "user_interface.h"     // for struct rst_info
 }
 
-char* firmwareVersion = "QQS1.1_251125";   // QQS-Pro build of C1.0.4_201109_beta (see QQS_CHANGES.md)
+char* firmwareVersion = "QQS1.2_251126";   // QQS-Pro build of C1.0.4_201109_beta (see QQS_CHANGES.md)
 
 
 
@@ -232,6 +232,9 @@ bool TryToConnect();
 void onWifiConfig();
 void qqsHandleScan();
 void qqsHandleStatus();
+void qqsHandleFiles();
+void qqsHandlePrint();
+static bool qqsBoardLine(const uint8_t *msg, uint16_t len);
 
 void cloud_down_file(const char *url);
 
@@ -2180,6 +2183,10 @@ static void transfer_msg_handle(uint8_t * msg, uint16_t msgLen)
 {
 	int j = 0;
 	char cmd_line[100] = {0};
+
+	// QQS-Pro: the board's replies for the web page (one line per packet, may be longer than cmd_line):
+	// kept here, not passed on to the TCP clients (slicers)
+	if (msgLen >= 4 && msg[0] == 'Q' && msg[1] == 'Q' && msg[2] == 'S' && qqsBoardLine(msg, msgLen)) return;
 	
 	init_queue(&cmd_queue);
 	cmd_index = 0;
@@ -2720,10 +2727,126 @@ void qqsHandleStatus()
 	j += F(",\"pr\":"); qqsJsonStr(j, qqsPrinterLine.c_str());
 	j += F(",\"pn\":"); qqsJsonStr(j, qqsPrinterName.c_str());
 	j += F(",\"age\":"); j += qqsPrinterMs ? (long)(millis() - qqsPrinterMs) : -1L;
+	j += F(",\"heap\":"); j += ESP.getFreeHeap();
 	j += '}';
 	qqsWebMs = millis(); if (!qqsWebMs) qqsWebMs = 1;
 	server.sendHeader(F("Cache-Control"), F("no-cache"));
 	server.send(200, F("application/json; charset=utf-8"), j);
+}
+
+// ---- QQS-Pro: SD card list and starting a print (Marlin QQS v3.2.14+: M2013 / M2014, see qqs_wifi_web.cpp) ----
+
+static struct {
+	bool on, done;
+	uint8_t code;
+	uint16_t got, total;
+	uint32_t t0;
+	String dir, json;
+} qqsList;
+static int qqsPrintRes = -1;
+static uint32_t qqsPrintMs = 0;
+
+// One line from the board starting with "QQS". false = not ours (handled as usual).
+static bool qqsBoardLine(const uint8_t *msg, uint16_t len)
+{
+	uint16_t n = 0;
+	while (n < len && msg[n] != '\r' && msg[n] != '\n' && msg[n] != 0) n++;
+	String line; line.reserve(n + 1);
+	for (uint16_t i = 0; i < n; i++) line += (char)msg[i];
+	if (line.startsWith("QQS s=")) { line.trim(); qqsPrinterLine = line.substring(4); qqsPrinterMs = millis(); return true; }
+	if (line.startsWith("QQSN ")) { qqsPrinterName = line.substring(5); return true; }
+	if (line.startsWith("QQSF ")) {   // QQSF <d|f> <size> <hex 8.3 name> <name>
+		if (!qqsList.on || qqsList.done) return true;
+		const int a = 5, b = line.indexOf(' ', a + 2), c = b < 0 ? -1 : line.indexOf(' ', b + 1);
+		if (b < 0 || c < 0) return true;
+		if (qqsList.json.length() > 8000) { qqsList.got++; qqsList.code = 1; return true; }   // keep the heap; the page says "more"
+		// type at a, size a+2 .. b, hex 8.3 name b+1 .. c, name after c
+		if (qqsList.got) qqsList.json += ',';
+		qqsList.json += '['; qqsList.json += (line[a] == 'd') ? '1' : '0';
+		qqsList.json += ','; qqsList.json += String(line.substring(a + 2, b).toInt());
+		qqsList.json += F(",\""); qqsList.json += line.substring(b + 1, c); qqsList.json += F("\",");
+		qqsJsonStr(qqsList.json, line.c_str() + c + 1);
+		qqsList.json += ']';
+		qqsList.got++;
+		return true;
+	}
+	if (line.startsWith("QQSE ")) {   // QQSE <count> <code>
+		if (!qqsList.on) return true;
+		const int sp = line.indexOf(' ', 5);
+		qqsList.total = line.substring(5, sp < 0 ? line.length() : sp).toInt();
+		const uint8_t c = sp < 0 ? 0 : line.substring(sp + 1).toInt();
+		if (c || !qqsList.code) qqsList.code = c;
+		qqsList.done = true;
+		return true;
+	}
+	if (line.startsWith("QQSP ")) { qqsPrintRes = line.substring(5).toInt(); return true; }
+	return false;
+}
+
+static bool qqsHexArg(const char *name, String &out)
+{
+	out = server.arg(name);
+	if (out.length() > 160 || (out.length() & 1)) return false;
+	for (unsigned i = 0; i < out.length(); i++) if (!isxdigit(out[i])) return false;
+	out.toUpperCase();
+	return true;
+}
+
+// GET /files?d=<hex 8.3 path>&go=1 asks the board; GET /files gives the answer when it is there:
+// {"st":"wait"|"ok"|"timeout"|"busy"|"none", "d":"<hex>", "code":0, "total":n, "got":n, "f":[[dir,size,"hex","name"],..]}
+void qqsHandleFiles()
+{
+	String j;
+	if (server.hasArg("go")) {
+		String d;
+		if (!qqsHexArg("d", d)) { server.send(400, F("application/json"), F("{\"st\":\"bad\"}")); return; }
+		if (transfer_file_flag || transfer_state != TRANSFER_IDLE) j = F("{\"st\":\"busy\"}");
+		else {
+			qqsList.on = true; qqsList.done = false; qqsList.code = 0; qqsList.got = qqsList.total = 0;
+			qqsList.t0 = millis(); qqsList.dir = d; qqsList.json = "";
+			package_gcode(String("M2013 H") + d + "\n", true);
+			j = F("{\"st\":\"wait\"}");
+		}
+	}
+	else if (!qqsList.on) j = F("{\"st\":\"none\"}");
+	else if (!qqsList.done) {
+		j = F("{\"st\":\""); j += (millis() - qqsList.t0 > 12000) ? F("timeout") : F("wait");
+		j += F("\",\"got\":"); j += qqsList.got; j += '}';
+	}
+	else {   // the list itself is streamed after the head, not copied (up to ~8 KB)
+		j = F("{\"st\":\"ok\",\"d\":\""); j += qqsList.dir;
+		j += F("\",\"code\":"); j += qqsList.code;
+		j += F(",\"total\":"); j += qqsList.total;
+		j += F(",\"got\":"); j += qqsList.got;
+		j += F(",\"f\":[");
+		qqsWebMs = millis(); if (!qqsWebMs) qqsWebMs = 1;
+		server.sendHeader(F("Cache-Control"), F("no-cache"));
+		server.setContentLength(j.length() + qqsList.json.length() + 2);
+		server.send(200, F("application/json; charset=utf-8"), j);
+		server.sendContent(qqsList.json);
+		server.sendContent(F("]}"));
+		return;
+	}
+	qqsWebMs = millis(); if (!qqsWebMs) qqsWebMs = 1;
+	server.sendHeader(F("Cache-Control"), F("no-cache"));
+	server.send(200, F("application/json; charset=utf-8"), j);
+}
+
+// GET /print?f=<hex 8.3 path>&go=1 asks the board to start it; GET /print -> {"r":code (-1 = no answer yet),"ms":age}
+void qqsHandlePrint()
+{
+	String j;
+	if (server.hasArg("go")) {
+		String f;
+		if (!qqsHexArg("f", f) || !f.length()) { server.send(400, F("application/json"), F("{\"st\":\"bad\"}")); return; }
+		if (transfer_file_flag || transfer_state != TRANSFER_IDLE) { server.send(200, F("application/json"), F("{\"r\":9}")); return; }
+		qqsPrintRes = -1; qqsPrintMs = millis();
+		package_gcode(String("M2014 H") + f + "\n", true);
+	}
+	j = F("{\"r\":"); j += qqsPrintRes;
+	j += F(",\"ms\":"); j += qqsPrintMs ? (long)(millis() - qqsPrintMs) : -1L; j += '}';
+	server.sendHeader(F("Cache-Control"), F("no-cache"));
+	server.send(200, F("application/json"), j);
 }
 
 void onWifiConfig()
@@ -2745,6 +2868,8 @@ void onWifiConfig()
 	});
 	server.on("/scan", HTTP_GET, qqsHandleScan);
 	server.on("/status", HTTP_GET, qqsHandleStatus);
+	server.on("/files", HTTP_GET, qqsHandleFiles);
+	server.on("/print", HTTP_GET, qqsHandlePrint);
 	server.on("/update_sketch", HTTP_GET, []() {
 		server.send(200, FPSTR(STR_MIME_TEXT_HTML), wifiConfigHtml);
 	});

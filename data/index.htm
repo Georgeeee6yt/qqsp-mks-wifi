@@ -54,6 +54,16 @@ label{display:block;margin:10px 0 4px;font-size:13px;color:var(--mut)}
 .chip{border:1px solid var(--line);border-radius:6px;padding:3px 8px;color:var(--mut)}
 .chip.warn{border-color:#e0a030;color:#e0a030}
 #pstate{font-size:14px}
+#files{margin:6px 0 0;padding:0;list-style:none}
+#files li{border-bottom:1px solid var(--line)}
+#files .it{display:flex;align-items:center;gap:10px;padding:9px 4px;cursor:pointer}
+#files .it:hover{background:#2c2c2c}
+#files .ic{width:20px;text-align:center;flex-shrink:0}
+#files .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#files .sz{color:var(--mut);font-size:13px;flex-shrink:0}
+#files .cf{display:flex;gap:8px;align-items:center;padding:0 4px 10px 34px;flex-wrap:wrap}
+#crumb{display:flex;gap:4px;flex-wrap:wrap;align-items:center;font-size:14px}
+#crumb a{color:var(--acc);cursor:pointer}
 footer{text-align:center;padding:4px 0 20px}
 footer a{color:var(--mut);font-size:13px}
 </style>
@@ -77,6 +87,13 @@ footer a{color:var(--mut);font-size:13px}
   </div>
   <div class="chips" id="chips" hidden><span class="chip" id="cv"></span><span class="chip" id="cw"></span><span class="chip" id="cz"></span></div>
   <div class="mut" id="pnote" style="margin-top:6px"></div>
+</section>
+
+<section>
+  <div class="row" style="justify-content:space-between"><h2 style="margin:0">SD 卡</h2><button id="fref" style="padding:4px 10px">重新整理</button></div>
+  <div id="crumb" style="margin-top:6px"></div>
+  <ul id="files"></ul>
+  <div class="msg" id="fmsg"></div>
 </section>
 
 <section>
@@ -158,6 +175,7 @@ function printer(st) {
   $('cdh').className = 'cd' + (ht ? ' hot' : ''); $('cdb').className = 'cd' + (bt ? ' hot' : '');
   $('vf').textContent = (kv.f || 0) + '%';
   const job = s > 0;
+  if (job !== jobOn) { jobOn = job; $('files').querySelectorAll('.cf button.pri').forEach(b => b.disabled = jobOn); }
   $('job').hidden = !job; $('chips').hidden = !job;
   if (job) {
     const p = +kv.p || 0;
@@ -195,6 +213,116 @@ $('drop').ondragleave = () => $('drop').classList.remove('on');
 $('drop').ondrop = e => { e.preventDefault(); $('drop').classList.remove('on'); if (e.dataTransfer.files[0]) upload(e.dataTransfer.files[0]); };
 $('file').onchange = () => { if ($('file').files[0]) upload($('file').files[0]); $('file').value = ''; };
 
+// ---- SD card list / start a print (Marlin QQS v3.2.14+ answers M2013 / M2014 through the module) ----
+let crumbs = [], flist = null, fbusy = false, jobOn = false;
+const hexOf = s => Array.from(new TextEncoder().encode(s), b => b.toString(16).padStart(2, '0').toUpperCase()).join('');
+const pathHex = cs => cs.map(c => '2F' + c.hex).join('');
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function fsz(b) { return b < 1048576 ? Math.max(1, Math.round(b / 1024)) + ' KB' : (b / 1048576).toFixed(1) + ' MB'; }
+async function jget(u) { const r = await fetch(u, {cache: 'no-store'}); return r.json(); }
+
+async function listDir(cs, quiet) {
+  if (fbusy) return null;
+  fbusy = true; $('fref').disabled = true;
+  if (!quiet) msg($('fmsg'), '讀取中…');
+  let res = null;
+  try {
+    for (let attempt = 0; attempt < 2 && !res; attempt++) {
+      const d = pathHex(cs);
+      const g = await jget('/files?go=1&d=' + d);
+      if (g.st === 'busy') { msg($('fmsg'), '模組正在傳檔，等一下再試', 'bad'); break; }
+      const t0 = Date.now();
+      while (Date.now() - t0 < 15000) {
+        await sleep(300);
+        const r = await jget('/files');
+        if (r.st === 'wait') continue;
+        if (r.st === 'ok' && r.d === d) {
+          if (r.code === 0 && r.got < r.total && attempt === 0) break;   // lines lost on the way: ask once more
+          res = r;
+        }
+        else if (r.st === 'timeout') msg($('fmsg'), '印表機沒有回應：主板韌體要 v3.2.14 以上', 'bad');
+        break;
+      }
+    }
+  } catch (e) { msg($('fmsg'), '連不到模組', 'bad'); }
+  fbusy = false; $('fref').disabled = false;
+  if (!res) return null;
+  if (res.code === 3) { msg($('fmsg'), '找不到這個資料夾', 'bad'); return null; }
+  if (res.code === 4) { msg($('fmsg'), '讀不到 SD 卡', 'bad'); return null; }
+  if (res.code === 5) { msg($('fmsg'), '路徑不對', 'bad'); return null; }
+  crumbs = cs;
+  // directory order: folders first, then files newest first (like the printer's list)
+  const all = res.f.map(([dir, size, hex, name]) => ({dir: !!dir, size, hex, name}));
+  flist = all.filter(e => e.dir).reverse().concat(all.filter(e => !e.dir).reverse());
+  drawFiles();
+  msg($('fmsg'), flist.length ? '' : '這裡沒有 G-code 檔案');
+  if (res.code === 1) msg($('fmsg'), '檔案太多，只列出前 ' + res.got + ' 個');
+  return flist;
+}
+
+function drawFiles() {
+  const c = $('crumb'); c.innerHTML = ''; c.hidden = !crumbs.length;   // only inside a folder
+  const root = document.createElement('a'); root.textContent = 'SD 卡'; root.onclick = () => listDir([]);
+  c.appendChild(root);
+  crumbs.forEach((k, i) => {
+    c.appendChild(document.createTextNode(' › '));
+    const a = document.createElement('a'); a.textContent = k.name; a.onclick = () => listDir(crumbs.slice(0, i + 1));
+    c.appendChild(a);
+  });
+  const ul = $('files'); ul.innerHTML = '';
+  for (const e of flist || []) {
+    const li = document.createElement('li');
+    li.innerHTML = '<div class="it"><span class="ic">' + (e.dir ? '📁' : '🧊') + '</span><span class="n"></span><span class="sz">' + (e.dir ? '' : fsz(e.size)) + '</span></div>';
+    li.querySelector('.n').textContent = e.name;
+    li.querySelector('.it').onclick = () => {
+      if (e.dir) { listDir(crumbs.concat([{name: e.name, hex: e.hex}])); return; }
+      const open = li.querySelector('.cf');
+      ul.querySelectorAll('.cf').forEach(x => x.remove());
+      if (open) return;
+      const cf = document.createElement('div'); cf.className = 'cf';
+      const go = document.createElement('button'); go.className = 'pri'; go.textContent = '開始列印';
+      const no = document.createElement('button'); no.textContent = '取消';
+      const note = document.createElement('span'); note.className = 'mut';
+      go.disabled = jobOn; if (jobOn) note.textContent = '印表機正在列印';
+      go.onclick = () => startPrint(crumbs.concat([{name: e.name, hex: e.hex}]), e.name);
+      no.onclick = () => cf.remove();
+      const full = document.createElement('div'); full.className = 'mut'; full.style.cssText = 'width:100%;word-break:break-all';
+      full.textContent = e.name;
+      if (li.querySelector('.n').scrollWidth > li.querySelector('.n').clientWidth) cf.append(full);   // name cut in the row
+      cf.append(go, no, note); li.appendChild(cf);
+    };
+    ul.appendChild(li);
+  }
+}
+
+const PRINT_ERR = {1: '印表機已經有工作在進行', 2: '印表機正在使用其他功能（移動中，或不在主畫面／選檔畫面），回到主畫面再試', 3: '找不到這個檔案，請重新整理清單', 4: '讀不到 SD 卡', 5: '路徑太長（資料夾太深）', 9: '模組正在傳檔'};
+async function startPrint(cs, name) {
+  $('files').querySelectorAll('.cf button').forEach(b => b.disabled = true);
+  msg($('fmsg'), '送出中…');
+  let r = {r: -1};
+  try {
+    r = await jget('/print?go=1&f=' + pathHex(cs));
+    const t0 = Date.now();
+    while (r.r < 0 && Date.now() - t0 < 6000) { await sleep(300); r = await jget('/print'); }
+  } catch (e) { msg($('fmsg'), '連不到模組', 'bad'); return; }
+  if (r.r === 0) {
+    msg($('fmsg'), '已開始列印：' + name, 'ok');
+    $('files').querySelectorAll('.cf').forEach(x => x.remove());
+    status(); $('pc').scrollIntoView({behavior: 'smooth'});
+  }
+  else msg($('fmsg'), r.r < 0 ? '印表機沒有回應：主板韌體要 v3.2.14 以上' : (PRINT_ERR[r.r] || '印表機拒絕（' + r.r + '）'), 'bad');
+  $('files').querySelectorAll('.cf button.pri').forEach(b => b.disabled = jobOn);
+}
+$('fref').onclick = () => listDir(crumbs);
+
+// After an upload: find the new file in the root list and offer to print it
+async function printUploaded(name) {
+  const l = await listDir([], true);
+  const e = l && l.find(x => !x.dir && x.name === name) || l && l.find(x => !x.dir && x.name.toLowerCase() === name.toLowerCase());
+  if (!e) { msg($('umsg'), '在 SD 卡根目錄找不到「' + name + '」', 'bad'); return; }
+  startPrint([{name: e.name, hex: e.hex}], e.name);
+}
+
 function upload(f) {
   if (uploading) return;
   if (st && st.printing) { msg($('umsg'), '列印中不能上傳', 'bad'); return; }
@@ -215,7 +343,15 @@ function upload(f) {
     uploading = false;
     let ok = x.status === 200;
     try { ok = ok && JSON.parse(x.responseText).err === 0; } catch (e) {}
-    if (ok) { $('pb').style.width = '100%'; msg($('umsg'), '已存到 SD 卡：' + f.name + '（' + ((Date.now() - t0) / 1000).toFixed(0) + ' 秒）', 'ok'); }
+    if (ok) {
+      $('pb').style.width = '100%';
+      msg($('umsg'), '已存到 SD 卡：' + f.name + '（' + ((Date.now() - t0) / 1000).toFixed(0) + ' 秒）', 'ok');
+      const b = document.createElement('button'); b.className = 'pri'; b.textContent = '開始列印這個檔'; b.style.marginLeft = '8px';
+      b.disabled = jobOn;
+      b.onclick = () => { b.disabled = true; printUploaded(f.name).then(() => { $('pc').scrollIntoView({behavior: 'smooth'}); }); };
+      $('umsg').appendChild(b);
+      setTimeout(() => listDir(crumbs, true), 300);
+    }
     else if (x.status === 409) msg($('umsg'), '印表機正在列印或傳檔，等一下再傳', 'bad');
     else msg($('umsg'), '上傳失敗（' + x.status + '）：印表機沒有接收，請看印表機畫面', 'bad');
     status();
@@ -274,6 +410,8 @@ $('apply').onclick = async () => {
 
 setMode('sta');
 status();
+// The list after the animations have loaded (the module serves one request at a time)
+window.addEventListener('load', () => setTimeout(() => listDir([]), 300));
 setInterval(() => { if (document.visibilityState === 'visible') status(); }, 2000);
 </script>
 </body>
