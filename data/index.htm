@@ -38,6 +38,22 @@ label{display:block;margin:10px 0 4px;font-size:13px;color:var(--mut)}
 .seg button.on{background:var(--acc);color:#111}
 .msg{margin-top:8px;font-size:14px;min-height:1.5em}
 .ok{color:var(--ok)}.bad{color:var(--bad)}
+[hidden]{display:none!important}
+#pc .ban{display:block;width:100%;aspect-ratio:428/174;background:#222;border-radius:6px}
+#pc .ban img{width:100%;height:100%;display:block}
+#pc .ban img.px{image-rendering:pixelated}
+.prow{display:flex;align-items:flex-end;gap:12px;margin-top:8px}
+.pct{font-size:44px;font-weight:700;line-height:1}
+.times{margin-left:auto;text-align:right;font-size:14px}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.cd{border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+.cd .k{font-size:12px;color:var(--mut)}.cd .v{font-size:20px;font-weight:700}
+.cd.hot{border-color:var(--acc)}.cd.hot .v{color:#ff6a3d}
+.cd.fan{border-color:#4a90d9}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:13px}
+.chip{border:1px solid var(--line);border-radius:6px;padding:3px 8px;color:var(--mut)}
+.chip.warn{border-color:#e0a030;color:#e0a030}
+#pstate{font-size:14px}
 footer{text-align:center;padding:4px 0 20px}
 footer a{color:var(--mut);font-size:13px}
 </style>
@@ -45,6 +61,23 @@ footer a{color:var(--mut);font-size:13px}
 <body>
 <header><h1>QQ-S Pro</h1><div id="st">讀取中…</div></header>
 <main>
+
+<section id="pc">
+  <div class="row" style="justify-content:space-between"><h2 style="margin:0">印表機</h2><span id="pstate" class="mut">讀取中…</span></div>
+  <div class="ban" style="margin-top:8px"><img id="anim" src="idle.gif" alt=""></div>
+  <div id="job" hidden>
+    <div class="mut" id="pname" style="margin-top:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+    <div class="prow"><span class="pct" id="ppct">0%</span><span class="times"><span id="pel"></span><br><span class="mut" id="prem"></span></span></div>
+    <div class="bar"><i id="ppb"></i></div>
+  </div>
+  <div class="cards">
+    <div class="cd" id="cdh"><div class="k">噴頭 <span id="th"></span></div><div class="v" id="vh">--</div></div>
+    <div class="cd" id="cdb"><div class="k">熱床 <span id="tb"></span></div><div class="v" id="vb">--</div></div>
+    <div class="cd fan"><div class="k">風扇</div><div class="v" id="vf">--</div></div>
+  </div>
+  <div class="chips" id="chips" hidden><span class="chip" id="cv"></span><span class="chip" id="cw"></span><span class="chip" id="cz"></span></div>
+  <div class="mut" id="pnote" style="margin-top:6px"></div>
+</section>
 
 <section>
   <h2>上傳 G-code</h2>
@@ -100,11 +133,52 @@ function bars(rssi) {
 function esc(s) { return s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function msg(el, text, cls) { el.className = 'msg ' + (cls || ''); el.textContent = text; }
 
+// ---- printer card (Marlin QQS v3.2.13+ answers M2012; the module passes it on as pr / pn / age) ----
+const ST = ['閒置中', '列印中', '加熱中', '暫停', '停止中'];
+const ANIM = ['idle.gif', 'print.gif', 'heat.gif', 'pause.gif', 'pause.gif'];
+let animNow = '';
+function hm(s) { s = Math.max(0, s | 0); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60; return h + ':' + String(m).padStart(2, '0'); }
+function setAnim(f) { if (f === animNow) return; animNow = f; const i = $('anim'); i.src = f; i.className = f === 'idle.gif' ? '' : 'px'; }
+function printer(st) {
+  const kv = {};
+  for (const t of (st.pr || '').split(' ')) { const i = t.indexOf('='); if (i > 0) kv[t.slice(0, i)] = t.slice(i + 1); }
+  if (!('s' in kv)) {
+    setAnim('idle.gif'); $('job').hidden = true; $('chips').hidden = true;
+    $('pstate').textContent = st.printing ? '列印中' : '閒置中';
+    $('pnote').textContent = st.age < 0 ? '主板韌體 v3.2.13 以上才會顯示溫度和進度。' : '';
+    return;
+  }
+  const s = +kv.s, num = v => (v || '0/0').split('/').map(Number);
+  const [h, ht] = num(kv.t), [b, bt] = num(kv.b);
+  const stale = st.age > 15000;
+  $('pstate').textContent = stale ? '主板沒有回應' : ST[s] || '';
+  setAnim(stale ? 'idle.gif' : ANIM[s] || 'idle.gif');
+  $('vh').textContent = (h / 10).toFixed(0) + '°'; $('th').textContent = ht ? '→ ' + ht + '°' : '';
+  $('vb').textContent = (b / 10).toFixed(0) + '°'; $('tb').textContent = bt ? '→ ' + bt + '°' : '';
+  $('cdh').className = 'cd' + (ht ? ' hot' : ''); $('cdb').className = 'cd' + (bt ? ' hot' : '');
+  $('vf').textContent = (kv.f || 0) + '%';
+  const job = s > 0;
+  $('job').hidden = !job; $('chips').hidden = !job;
+  if (job) {
+    const p = +kv.p || 0;
+    $('pname').textContent = st.pn || '';
+    $('ppct').textContent = p + '%'; $('ppb').style.width = p + '%';
+    $('pel').textContent = '已印 ' + hm(+kv.e);
+    $('prem').textContent = +kv.r >= 0 ? '剩餘 ' + hm(+kv.r) : '剩餘 --:--';
+    const z = (+kv.z || 0) / 100;
+    $('cv').textContent = '速度 ' + kv.v + '%'; $('cv').className = 'chip' + (+kv.v !== 100 ? ' warn' : '');
+    $('cw').textContent = '流量 ' + kv.w + '%'; $('cw').className = 'chip' + (+kv.w !== 100 ? ' warn' : '');
+    $('cz').textContent = 'Z 微調 ' + (z > 0 ? '+' : '') + z.toFixed(2); $('cz').className = 'chip' + (z ? ' warn' : '');
+  }
+  $('pnote').textContent = '';
+}
+
 async function status() {
   if (uploading) return;
   try {
     const r = await fetch('/status', {cache: 'no-store'});
     st = await r.json();
+    printer(st);
     $('st').innerHTML = esc(st.ip) + '<br>' + (st.mode === 'ap' ? '熱點 ' + esc(st.ssid) : esc(st.ssid) + ' ' + bars(st.rssi));
     if (!uploading) {
       $('drop').style.opacity = st.printing ? .4 : 1;
@@ -200,7 +274,7 @@ $('apply').onclick = async () => {
 
 setMode('sta');
 status();
-setInterval(status, 10000);
+setInterval(() => { if (document.visibilityState === 'visible') status(); }, 2000);
 </script>
 </body>
 </html>

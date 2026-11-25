@@ -11,8 +11,16 @@ First commit = the published source unchanged; later commits = QQS-Pro changes (
   so the phone that asked stays connected. (The UART scan used by the printer is unchanged.)
 - `GET /status`: version, mode, SSID, IP, RSSI, MAC, printing / busy. No password.
 - `/update_cfg`: arguments were URL-decoded twice (the server already decodes): "+" in a password became a space.
-- Version string `QQS1.0_251125`. UART protocol to the board unchanged.
-- `data/index.htm`: the page (G-code upload with progress to `/upload?X-Filename=`, Wi-Fi scan / connect / hotspot).
+- Version string `QQS1.1_251125`.
+- QQS1.1: the 5 s status poll also sends `M2012` (Marlin QQS v3.2.13+). Its reply lines `QQS s=… p=… …` and
+  `QQSN <file name>` are kept (not passed on) and returned by `/status` as `pr`, `pn` and `age` (ms since the last
+  `QQS` line, -1 = never: older board firmware). While a page asks for `/status` (last 30 s) the poll runs every 2 s.
+- QQS1.1: `.gif` served as `image/gif`, `.png` as `image/png`; images get `Cache-Control: max-age=86400`.
+- `data/index.htm`: the page (printer card with the printer's animation, G-code upload with progress to
+  `/upload?X-Filename=`, Wi-Fi scan / connect / hotspot).
+- `data/*.gif`: `tools/gen_web_anim.py` (needs `~/qqsp/sim/animsim.py` and the printer art). `print` / `heat` /
+  `pause` are the printer's 214 x 87 animation frames for those states, scaled 2 x nearest; `idle` is
+  `tools/art/idle_sleep.png` at 428 x 174 with the three Z's lifted out and animated.
 
 ## Build (PlatformIO)
 1. MKS core: `git clone https://github.com/makerbase-mks/Esp8266-Core-For-Arduino /tmp/mksrc/mkscore`, add a

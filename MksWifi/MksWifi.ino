@@ -20,7 +20,7 @@ extern "C" {
 #include "user_interface.h"     // for struct rst_info
 }
 
-char* firmwareVersion = "QQS1.0_251125";   // QQS-Pro build of C1.0.4_201109_beta (see QQS_CHANGES.md)
+char* firmwareVersion = "QQS1.1_251125";   // QQS-Pro build of C1.0.4_201109_beta (see QQS_CHANGES.md)
 
 
 
@@ -80,7 +80,7 @@ MksHTTPUpdateServer httpUpdater;
 char cloud_host[96] = "baizhongyun.cn";
 int cloud_port = 12345;
 boolean cloud_enable_flag = false;
-int cloud_link_state = 0; // 0:??¨®?¡ê?1:¨º1?¨¹¡ê??¡ä¨¢??¨®¡ê?2:¨°?¨¢??¨®¡ê??¡ä¡ã¨®?¡§¡ê?3:¨°?¡ã¨®?¡§
+int cloud_link_state = 0; // 0:??ÃÂ¨ÃÂ®?ÃÂ¡ÃÂª?1:ÃÂ¨ÃÂº1?ÃÂ¨ÃÂ¹ÃÂ¡ÃÂª??ÃÂ¡ÃÂ¤ÃÂ¨ÃÂ¢??ÃÂ¨ÃÂ®ÃÂ¡ÃÂª?2:ÃÂ¨ÃÂ°?ÃÂ¨ÃÂ¢??ÃÂ¨ÃÂ®ÃÂ¡ÃÂª??ÃÂ¡ÃÂ¤ÃÂ¡ÃÂ£ÃÂ¨ÃÂ®?ÃÂ¡ÃÂ§ÃÂ¡ÃÂª?3:ÃÂ¨ÃÂ°?ÃÂ¡ÃÂ£ÃÂ¨ÃÂ®?ÃÂ¡ÃÂ§
 
 RepRapWebServer server(80);
 
@@ -164,9 +164,9 @@ void cloud_get_file_list();
 typedef enum
 {
 	TRANSFER_IDLE,
-	TRANSFER_BEGIN,	//?a篓垄???篓篓Y隆盲拢陇?篓垄篓掳??隆茫娄脤?D-篓掳篓娄(D篓篓篓掳a?篓庐篓潞?M110)
-	TRANSFER_GET_FILE, //?篓垄篓篓????t篓潞y?Y隆锚?篓庐D篓潞y?Y篓陇-??ready篓掳y??
-	TRANSFER_READY,	//娄脤篓篓隆盲ystm32篓庐|隆盲e篓掳y??D?o?
+	TRANSFER_BEGIN,	//?aÃ§Â¯ÂÃ¥ÂÂ???Ã§Â¯ÂÃ§Â¯ÂYÃ©ÂÂÃ§ÂÂ²Ã¦ÂÂ¢Ã©ÂÂ?Ã§Â¯ÂÃ¥ÂÂÃ§Â¯ÂÃ¦ÂÂ³??Ã©ÂÂÃ¨ÂÂ«Ã¥Â¨ÂÃ¨ÂÂ¤?D-Ã§Â¯ÂÃ¦ÂÂ³Ã§Â¯ÂÃ¥Â¨Â(DÃ§Â¯ÂÃ§Â¯ÂÃ§Â¯ÂÃ¦ÂÂ³a?Ã§Â¯ÂÃ¥ÂºÂÃ§Â¯ÂÃ¦Â½Â?M110)
+	TRANSFER_GET_FILE, //?Ã§Â¯ÂÃ¥ÂÂÃ§Â¯ÂÃ§Â¯Â????tÃ§Â¯ÂÃ¦Â½Ây?YÃ©ÂÂÃ©ÂÂ?Ã§Â¯ÂÃ¥ÂºÂDÃ§Â¯ÂÃ¦Â½Ây?YÃ§Â¯ÂÃ©ÂÂ-??readyÃ§Â¯ÂÃ¦ÂÂ³y??
+	TRANSFER_READY,	//Ã¥Â¨ÂÃ¨ÂÂ¤Ã§Â¯ÂÃ§Â¯ÂÃ©ÂÂÃ§ÂÂ²ystm32Ã§Â¯ÂÃ¥ÂºÂ|Ã©ÂÂÃ§ÂÂ²eÃ§Â¯ÂÃ¦ÂÂ³y??D?o?
 	TRANSFER_FRAGMENT
 	
 } TRANS_STATE;
@@ -317,7 +317,7 @@ private:
 
 };
 
-class FILE_FIFO gFileFifo; //?-??隆卤????篓娄鈧??篓C??????隆茫??????fifo
+class FILE_FIFO gFileFifo; //?-??Ã©ÂÂÃ¥ÂÂ¤????Ã§Â¯ÂÃ¥Â¨ÂÃ©ÂÂ§??Ã§Â¯ÂC??????Ã©ÂÂÃ¨ÂÂ«??????fifo
 
 
 
@@ -686,8 +686,11 @@ void net_print(const uint8_t *sbuf, uint32_t len)
 	}
 }
 
+uint32_t qqsWebMs = 0;
+
 void query_printer_inf()
 {
+	const uint32_t qqsPeriod = (qqsWebMs && millis() - qqsWebMs < 30000) ? 2000 : 5000;   // QQS-Pro
 	static int last_query_temp_time = 0;
 	static int last_query_file_time = 0;
 
@@ -697,12 +700,12 @@ void query_printer_inf()
 		if((gPrinterInf.print_state == PRINTER_PRINTING) || (gPrinterInf.print_state == PRINTER_PAUSE))
 		//if(!printFinishFlag)
 		{
-			if(millis() - last_query_temp_time > 5000) //every 5 seconds
+			if(millis() - last_query_temp_time > qqsPeriod) //every 5 seconds (QQS-Pro: 2 s while a web page is open)
 			{
 				if(GET_VERSION_OK)
-					package_gcode("M27\nM992\nM994\nM991\nM997\n", false);
+					package_gcode("M27\nM992\nM994\nM991\nM997\nM2012\n", false);
 				else
-					package_gcode("M27\nM992\nM994\nM991\nM997\nM115\n", false);
+					package_gcode("M27\nM992\nM994\nM991\nM997\nM115\nM2012\n", false);
 				
 				/*transfer_state = TRANSFER_READY;
 				digitalWrite(EspReqTransferPin, LOW);*/
@@ -712,15 +715,15 @@ void query_printer_inf()
 		}
 		else
 		{
-			if(millis() - last_query_temp_time > 5000) //every 5 seconds
+			if(millis() - last_query_temp_time > qqsPeriod) //every 5 seconds (QQS-Pro: 2 s while a web page is open)
 			{
 				
 				if(GET_VERSION_OK)
 					//package_gcode("M27\nM997\n");
-					package_gcode("M991\nM27\nM997\n", false);
+					package_gcode("M991\nM27\nM997\nM2012\n", false);
 				else
 					//package_gcode("M27\nM997\nM115\n");
-					package_gcode("M991\nM27\nM997\nM115\n", false);
+					package_gcode("M991\nM27\nM997\nM115\nM2012\n", false);
 				
 				/*transfer_state = TRANSFER_READY;
 				digitalWrite(EspReqTransferPin, LOW);*/
@@ -1843,20 +1846,20 @@ void do_transfer()
 #define ESP_TYPE_WIFI_CTRL		(uint8_t)0x9
 
 
-uint8_t esp_msg_buf[UART_RX_BUFFER_SIZE] = {0}; //麓忙麓垄麓媒麓娄脌铆碌脛脢媒戮脻
-uint16_t esp_msg_index = 0; //脨麓脰赂脮毛
+uint8_t esp_msg_buf[UART_RX_BUFFER_SIZE] = {0}; //Ã©ÂºÂÃ¥Â¿ÂÃ©ÂºÂÃ¥ÂÂÃ©ÂºÂÃ¥ÂªÂÃ©ÂºÂÃ¥Â¨ÂÃ¨ÂÂÃ©ÂÂÃ§Â¢ÂÃ¨ÂÂÃ¨ÂÂ¢Ã¥ÂªÂÃ¦ÂÂ®Ã¨ÂÂ»
+uint16_t esp_msg_index = 0; //Ã¨ÂÂ¨Ã©ÂºÂÃ¨ÂÂ°Ã¨ÂµÂÃ¨ÂÂ®Ã¦Â¯Â
 
 typedef struct
 {
 	uint8_t head; //0xa5
-	uint8_t type; //0x0:脡猫脰脙脥酶脗莽虏脦脢媒,0x1:麓貌脫隆禄煤脨脜脧垄,0x2:脥赂麓芦脨脜脧垄,0x3:脪矛鲁拢脨脜脧垄
-	uint16_t dataLen; //脢媒戮脻鲁陇露脠
-	uint8_t *data; //脫脨脨搂脢媒戮脻
+	uint8_t type; //0x0:Ã¨ÂÂ¡Ã§ÂÂ«Ã¨ÂÂ°Ã¨ÂÂÃ¨ÂÂ¥Ã©ÂÂ¶Ã¨ÂÂÃ¨ÂÂ½Ã¨ÂÂÃ¨ÂÂ¦Ã¨ÂÂ¢Ã¥ÂªÂ,0x1:Ã©ÂºÂÃ¨Â²ÂÃ¨ÂÂ«Ã©ÂÂÃ§Â¦ÂÃ§ÂÂ¤Ã¨ÂÂ¨Ã¨ÂÂÃ¨ÂÂ§Ã¥ÂÂ,0x2:Ã¨ÂÂ¥Ã¨ÂµÂÃ©ÂºÂÃ¨ÂÂ¦Ã¨ÂÂ¨Ã¨ÂÂÃ¨ÂÂ§Ã¥ÂÂ,0x3:Ã¨ÂÂªÃ§ÂÂÃ©Â²ÂÃ¦ÂÂ¢Ã¨ÂÂ¨Ã¨ÂÂÃ¨ÂÂ§Ã¥ÂÂ
+	uint16_t dataLen; //Ã¨ÂÂ¢Ã¥ÂªÂÃ¦ÂÂ®Ã¨ÂÂ»Ã©Â²ÂÃ©ÂÂÃ©ÂÂ²Ã¨ÂÂ 
+	uint8_t *data; //Ã¨ÂÂ«Ã¨ÂÂ¨Ã¨ÂÂ¨Ã¦ÂÂÃ¨ÂÂ¢Ã¥ÂªÂÃ¦ÂÂ®Ã¨ÂÂ»
 	uint8_t tail; // 0xfc
 } ESP_PROTOC_FRAME;
 
 
-/*路碌禄脴脢媒脳茅脰脨脛鲁脳脰路没鲁枚脧脰脳卯脭莽碌脛脣梅脪媒潞脜拢卢麓脫0驴陋脢录,脠么虏禄麓忙脭脷脭貌路碌禄脴-1*/
+/*Ã¨Â·Â¯Ã§Â¢ÂÃ§Â¦ÂÃ¨ÂÂ´Ã¨ÂÂ¢Ã¥ÂªÂÃ¨ÂÂ³Ã¨ÂÂÃ¨ÂÂ°Ã¨ÂÂ¨Ã¨ÂÂÃ©Â²ÂÃ¨ÂÂ³Ã¨ÂÂ°Ã¨Â·Â¯Ã¦Â²Â¡Ã©Â²ÂÃ¦ÂÂÃ¨ÂÂ§Ã¨ÂÂ°Ã¨ÂÂ³Ã¥ÂÂ¯Ã¨ÂÂ­Ã¨ÂÂ½Ã§Â¢ÂÃ¨ÂÂÃ¨ÂÂ£Ã¦Â¢ÂÃ¨ÂÂªÃ¥ÂªÂÃ¦Â½ÂÃ¨ÂÂÃ¦ÂÂ¢Ã¥ÂÂ¢Ã©ÂºÂÃ¨ÂÂ«0Ã©Â©Â´Ã©ÂÂÃ¨ÂÂ¢Ã¥Â½Â,Ã¨ÂÂ Ã¤Â¹ÂÃ¨ÂÂÃ§Â¦ÂÃ©ÂºÂÃ¥Â¿ÂÃ¨ÂÂ­Ã¨ÂÂ·Ã¨ÂÂ­Ã¨Â²ÂÃ¨Â·Â¯Ã§Â¢ÂÃ§Â¦ÂÃ¨ÂÂ´-1*/
 static int32_t charAtArray(const uint8_t *_array, uint32_t _arrayLen, uint8_t _char)
 {
 	uint32_t i;
@@ -1912,7 +1915,7 @@ static void net_msg_handle(uint8_t * msg, uint16_t msgLen)
 
 	//0x01:AP
 	//0x02:Client
-	//0x03:AP+Client(?Y2??隆矛3?)
+	//0x03:AP+Client(?Y2??Ã©ÂÂÃ§ÂÂ3?)
 	if((msg[0] != 0x01) && (msg[0] != 0x02)) 
 		return;
 	cfg_mode = msg[0];
@@ -2282,7 +2285,7 @@ void esp_data_parser(char *cmdRxBuf, int len)
 	int32_t head_pos;
 	int32_t tail_pos;
 	uint16_t cpyLen;
-	int16_t leftLen = len; //脢拢脫脿鲁陇露脠
+	int16_t leftLen = len; //Ã¨ÂÂ¢Ã¦ÂÂ¢Ã¨ÂÂ«Ã¨ÂÂ¿Ã©Â²ÂÃ©ÂÂÃ©ÂÂ²Ã¨ÂÂ 
 	uint8_t loop_again = 0;
 	int i;
 
@@ -2299,7 +2302,7 @@ void esp_data_parser(char *cmdRxBuf, int len)
 	{
 		loop_again = 0;
 		
-		/* 1. 虏茅脮脪脰隆脥路*/
+		/* 1. Ã¨ÂÂÃ¨ÂÂÃ¨ÂÂ®Ã¨ÂÂªÃ¨ÂÂ°Ã©ÂÂÃ¨ÂÂ¥Ã¨Â·Â¯*/
 		if(esp_msg_index != 0)
 		{
 			head_pos = 0;
@@ -2315,7 +2318,7 @@ void esp_data_parser(char *cmdRxBuf, int len)
 		//	net_print((const uint8_t *)esp_msg_buf, esp_msg_index);	
 			if(tail_pos == -1)
 			{
-				//脙禄脫脨脰隆脦虏
+				//Ã¨ÂÂÃ§Â¦ÂÃ¨ÂÂ«Ã¨ÂÂ¨Ã¨ÂÂ°Ã©ÂÂÃ¨ÂÂ¦Ã¨ÂÂ
 				if(esp_msg_index >= sizeof(esp_msg_buf))
 				{
 					memset(esp_msg_buf, 0, sizeof(esp_msg_buf));
@@ -2331,12 +2334,12 @@ void esp_data_parser(char *cmdRxBuf, int len)
 		//	net_print((const uint8_t *)"esp_data_parser1\n");
 			if(head_pos == -1)
 			{
-				//脙禄脫脨脰隆脥路
+				//Ã¨ÂÂÃ§Â¦ÂÃ¨ÂÂ«Ã¨ÂÂ¨Ã¨ÂÂ°Ã©ÂÂÃ¨ÂÂ¥Ã¨Â·Â¯
 				return;
 			}
 			else
 			{
-				//脧脠禄潞麓忙碌陆buf	
+				//Ã¨ÂÂ§Ã¨ÂÂ Ã§Â¦ÂÃ¦Â½ÂÃ©ÂºÂÃ¥Â¿ÂÃ§Â¢ÂÃ©ÂÂbuf	
 				memset(esp_msg_buf, 0, sizeof(esp_msg_buf));
 				memcpy(esp_msg_buf, &cmdRxBuf[len - leftLen + head_pos], leftLen - head_pos);
 
@@ -2351,14 +2354,14 @@ void esp_data_parser(char *cmdRxBuf, int len)
 				//net_print((const uint8_t *)"esp_data_parser2\n", strlen((const char *)"esp_data_parser2\n"));
 				if(tail_pos == -1)
 				{
-					//脮脪碌陆脰隆脥路拢卢脙禄脫脨脰隆脦虏		
+					//Ã¨ÂÂ®Ã¨ÂÂªÃ§Â¢ÂÃ©ÂÂÃ¨ÂÂ°Ã©ÂÂÃ¨ÂÂ¥Ã¨Â·Â¯Ã¦ÂÂ¢Ã¥ÂÂ¢Ã¨ÂÂÃ§Â¦ÂÃ¨ÂÂ«Ã¨ÂÂ¨Ã¨ÂÂ°Ã©ÂÂÃ¨ÂÂ¦Ã¨ÂÂ		
 					return;
 				}
 				
 			}
 		}
 		//net_print((const uint8_t *)"esp_data_parser3\n");
-		/*3. 脮脪碌陆脥锚脮没碌脛脪禄脰隆	, 脜脨露脧脢媒戮脻鲁陇露脠*/
+		/*3. Ã¨ÂÂ®Ã¨ÂÂªÃ§Â¢ÂÃ©ÂÂÃ¨ÂÂ¥Ã©ÂÂÃ¨ÂÂ®Ã¦Â²Â¡Ã§Â¢ÂÃ¨ÂÂÃ¨ÂÂªÃ§Â¦ÂÃ¨ÂÂ°Ã©ÂÂ	, Ã¨ÂÂÃ¨ÂÂ¨Ã©ÂÂ²Ã¨ÂÂ§Ã¨ÂÂ¢Ã¥ÂªÂÃ¦ÂÂ®Ã¨ÂÂ»Ã©Â²ÂÃ©ÂÂÃ©ÂÂ²Ã¨ÂÂ */
 		esp_frame.type = esp_msg_buf[1];
 	
 		if((esp_frame.type != ESP_TYPE_NET) && (esp_frame.type != ESP_TYPE_PRINTER)
@@ -2367,7 +2370,7 @@ void esp_data_parser(char *cmdRxBuf, int len)
 			 && (esp_frame.type != ESP_TYPE_WID) && (esp_frame.type != ESP_TYPE_SCAN_WIFI)
 			 && (esp_frame.type != ESP_TYPE_MANUAL_IP) && (esp_frame.type != ESP_TYPE_WIFI_CTRL))
 		{
-			//脢媒戮脻脌脿脨脥虏禄脮媒脠路拢卢露陋脝煤
+			//Ã¨ÂÂ¢Ã¥ÂªÂÃ¦ÂÂ®Ã¨ÂÂ»Ã¨ÂÂÃ¨ÂÂ¿Ã¨ÂÂ¨Ã¨ÂÂ¥Ã¨ÂÂÃ§Â¦ÂÃ¨ÂÂ®Ã¥ÂªÂÃ¨ÂÂ Ã¨Â·Â¯Ã¦ÂÂ¢Ã¥ÂÂ¢Ã©ÂÂ²Ã©ÂÂÃ¨ÂÂÃ§ÂÂ¤
 			memset(esp_msg_buf, 0, sizeof(esp_msg_buf));
 			esp_msg_index = 0;
 			//net_print((const uint8_t *)"type err\n", strlen("type err\n"));
@@ -2376,10 +2379,10 @@ void esp_data_parser(char *cmdRxBuf, int len)
 		//net_print((const uint8_t *)"esp_data_parser4\n");
 		esp_frame.dataLen = esp_msg_buf[2] + (esp_msg_buf[3] << 8);
 
-		/*脢媒戮脻鲁陇露脠虏禄脮媒脠路*/
+		/*Ã¨ÂÂ¢Ã¥ÂªÂÃ¦ÂÂ®Ã¨ÂÂ»Ã©Â²ÂÃ©ÂÂÃ©ÂÂ²Ã¨ÂÂ Ã¨ÂÂÃ§Â¦ÂÃ¨ÂÂ®Ã¥ÂªÂÃ¨ÂÂ Ã¨Â·Â¯*/
 		if(4 + esp_frame.dataLen > sizeof(esp_msg_buf))
 		{
-			//脢媒戮脻鲁陇露脠虏禄脮媒脠路拢卢露陋脝煤
+			//Ã¨ÂÂ¢Ã¥ÂªÂÃ¦ÂÂ®Ã¨ÂÂ»Ã©Â²ÂÃ©ÂÂÃ©ÂÂ²Ã¨ÂÂ Ã¨ÂÂÃ§Â¦ÂÃ¨ÂÂ®Ã¥ÂªÂÃ¨ÂÂ Ã¨Â·Â¯Ã¦ÂÂ¢Ã¥ÂÂ¢Ã©ÂÂ²Ã©ÂÂÃ¨ÂÂÃ§ÂÂ¤
 			memset(esp_msg_buf, 0, sizeof(esp_msg_buf));
 			esp_msg_index = 0;
 			//net_print((const uint8_t *)"len err\n", strlen("len err\n"));
@@ -2388,14 +2391,14 @@ void esp_data_parser(char *cmdRxBuf, int len)
 
 		if(esp_msg_buf[4 + esp_frame.dataLen] != ESP_PROTOC_TAIL)
 		{
-			//脰隆脦虏虏禄脮媒脠路拢卢露陋脝煤
+			//Ã¨ÂÂ°Ã©ÂÂÃ¨ÂÂ¦Ã¨ÂÂÃ¨ÂÂÃ§Â¦ÂÃ¨ÂÂ®Ã¥ÂªÂÃ¨ÂÂ Ã¨Â·Â¯Ã¦ÂÂ¢Ã¥ÂÂ¢Ã©ÂÂ²Ã©ÂÂÃ¨ÂÂÃ§ÂÂ¤
 			memset(esp_msg_buf, 0, sizeof(esp_msg_buf));
 			//net_print((const uint8_t *)"tail err\n", strlen("tail err\n"));
 			esp_msg_index = 0;
 			return;
 		}
 	
-		/*4. 掳麓脮脮脌脿脨脥路脰卤冒麓娄脌铆脢媒戮脻*/		
+		/*4. Ã¦ÂÂ³Ã©ÂºÂÃ¨ÂÂ®Ã¨ÂÂ®Ã¨ÂÂÃ¨ÂÂ¿Ã¨ÂÂ¨Ã¨ÂÂ¥Ã¨Â·Â¯Ã¨ÂÂ°Ã¥ÂÂ¤Ã¥ÂÂÃ©ÂºÂÃ¥Â¨ÂÃ¨ÂÂÃ©ÂÂÃ¨ÂÂ¢Ã¥ÂªÂÃ¦ÂÂ®Ã¨ÂÂ»*/		
 		esp_frame.data = &esp_msg_buf[4];
 
 		
@@ -2453,7 +2456,7 @@ void esp_data_parser(char *cmdRxBuf, int len)
 			default:
 				break;				
 		}
-		/*5. 掳脩脪脩麓娄脌铆碌脛脢媒戮脻陆脴碌么*/
+		/*5. Ã¦ÂÂ³Ã¨ÂÂ©Ã¨ÂÂªÃ¨ÂÂ©Ã©ÂºÂÃ¥Â¨ÂÃ¨ÂÂÃ©ÂÂÃ§Â¢ÂÃ¨ÂÂÃ¨ÂÂ¢Ã¥ÂªÂÃ¦ÂÂ®Ã¨ÂÂ»Ã©ÂÂÃ¨ÂÂ´Ã§Â¢ÂÃ¤Â¹Â*/
 		esp_msg_index = cut_msg_head(esp_msg_buf, esp_msg_index, esp_frame.dataLen  + 5);
 		if(esp_msg_index > 0)
 		{
@@ -2631,18 +2634,18 @@ uint8_t refreshApWeb()
 	wifiConfigHtml += F("<input type=\"submit\" value=\"Save and reboot\" /></form></body></html>");
 	#endif
 	#if 0
-	wifiConfigHtml = F("<html><head><meta http-equiv=\"Content-Type\" content=\"text/html;\"><title>MKS WIFI脜盲脰脙</title><style>body{background: #b5ff6a;}.config{margin: 150px auto;width: 600px;height: 600px;overflow: hidden;</style></head>");
-	//wifiConfigHtml += F("<body><div class=\"config\"><br /><form method=\"POST\"><caption><h1>MKS WIFI脜盲脰脙</h1></caption> <div>赂陆陆眉WIFI脕脨卤铆:</div>/>");
+	wifiConfigHtml = F("<html><head><meta http-equiv=\"Content-Type\" content=\"text/html;\"><title>MKS WIFIÃ¨ÂÂÃ§ÂÂ²Ã¨ÂÂ°Ã¨ÂÂ</title><style>body{background: #b5ff6a;}.config{margin: 150px auto;width: 600px;height: 600px;overflow: hidden;</style></head>");
+	//wifiConfigHtml += F("<body><div class=\"config\"><br /><form method=\"POST\"><caption><h1>MKS WIFIÃ¨ÂÂÃ§ÂÂ²Ã¨ÂÂ°Ã¨ÂÂ</h1></caption> <div>Ã¨ÂµÂÃ©ÂÂÃ©ÂÂÃ§ÂÂWIFIÃ¨ÂÂÃ¨ÂÂ¨Ã¥ÂÂ¤Ã©ÂÂ:</div>/>");
 	wifiConfigHtml += F("<body><div class=\"config\"><br /><form method=\"POST\" action='config' ><caption><h1>MKS WIFI</h1></caption> ");
 	/*
 	for (uint8_t i = 0; i < num_ssids; i++) {		
 		wifiConfigHtml += "<input type=\"radio\" id=\"" + WiFi.SSID(i) + "\"name=\"ssid\" value=\"" + WiFi.SSID(i) + "\" /><label for=\"" + WiFi.SSID(i) + "\">" + WiFi.SSID(i) + "</label><br />";
 	}*/
-	wifiConfigHtml += F("<br /><h2>赂眉脨脗鹿脤录镁</h2><form method='POST' action='update_sketch' enctype='multipart/form-data'><input type='file' name='update'><input type='submit' value='Update'></td></tr></table></form><br /><br/>");
-	wifiConfigHtml += F("<h2>脥酶脗莽脜盲脰脙</h2><input type=\"radio\" id=\"wifi_mode_sta\" name=\"wifi_mode\" value=\"wifi_mode_sta\" /><label for=\"wifi_mode_sta\">STA(脡猫脰脙脕卢陆脫碌陆脧脗脙忙wifi)</label><br /><input type=\"radio\" id=\"wifi_mode_ap\" name=\"wifi_mode\" value=\"wifi_mode_ap\" /><label for=\"wifi_mode_ap\">AP(脡猫脰脙脛拢驴茅脦陋脧脗脙忙脠脠碌茫)</label><br />");
+	wifiConfigHtml += F("<br /><h2>Ã¨ÂµÂÃ§ÂÂÃ¨ÂÂ¨Ã¨ÂÂÃ©Â¹Â¿Ã¨ÂÂ¤Ã¥Â½ÂÃ©ÂÂ</h2><form method='POST' action='update_sketch' enctype='multipart/form-data'><input type='file' name='update'><input type='submit' value='Update'></td></tr></table></form><br /><br/>");
+	wifiConfigHtml += F("<h2>Ã¨ÂÂ¥Ã©ÂÂ¶Ã¨ÂÂÃ¨ÂÂ½Ã¨ÂÂÃ§ÂÂ²Ã¨ÂÂ°Ã¨ÂÂ</h2><input type=\"radio\" id=\"wifi_mode_sta\" name=\"wifi_mode\" value=\"wifi_mode_sta\" /><label for=\"wifi_mode_sta\">STA(Ã¨ÂÂ¡Ã§ÂÂ«Ã¨ÂÂ°Ã¨ÂÂÃ¨ÂÂÃ¥ÂÂ¢Ã©ÂÂÃ¨ÂÂ«Ã§Â¢ÂÃ©ÂÂÃ¨ÂÂ§Ã¨ÂÂÃ¨ÂÂÃ¥Â¿Âwifi)</label><br /><input type=\"radio\" id=\"wifi_mode_ap\" name=\"wifi_mode\" value=\"wifi_mode_ap\" /><label for=\"wifi_mode_ap\">AP(Ã¨ÂÂ¡Ã§ÂÂ«Ã¨ÂÂ°Ã¨ÂÂÃ¨ÂÂÃ¦ÂÂ¢Ã©Â©Â´Ã¨ÂÂÃ¨ÂÂ¦Ã©ÂÂÃ¨ÂÂ§Ã¨ÂÂÃ¨ÂÂÃ¥Â¿ÂÃ¨ÂÂ Ã¨ÂÂ Ã§Â¢ÂÃ¨ÂÂ«)</label><br />");
 	
 
-	wifiConfigHtml += F("<br /><br /><table border='0'><tr><td><label for=\"password\">WIFI拢潞</label><input type=\"text\" id=\"hidden_ssid\" name=\"hidden_ssid\" /></td></tr><tr><td><label for=\"password\">脙脺脗毛拢潞</label>");wifiConfigHtml += F("<input type=\" PASSWORD_INPUT_TYPE \" id=\"password\" name=\"password\" /></td></tr><tr><td colspan=2 align=\"right\"> <input type=\"submit\" value=\"脡猫脰脙虏垄脰脴脝么\"></td></tr></table></form></div></div></body></html>");
+	wifiConfigHtml += F("<br /><br /><table border='0'><tr><td><label for=\"password\">WIFIÃ¦ÂÂ¢Ã¦Â½Â</label><input type=\"text\" id=\"hidden_ssid\" name=\"hidden_ssid\" /></td></tr><tr><td><label for=\"password\">Ã¨ÂÂÃ¨ÂÂºÃ¨ÂÂÃ¦Â¯ÂÃ¦ÂÂ¢Ã¦Â½Â</label>");wifiConfigHtml += F("<input type=\" PASSWORD_INPUT_TYPE \" id=\"password\" name=\"password\" /></td></tr><tr><td colspan=2 align=\"right\"> <input type=\"submit\" value=\"Ã¨ÂÂ¡Ã§ÂÂ«Ã¨ÂÂ°Ã¨ÂÂÃ¨ÂÂÃ¥ÂÂÃ¨ÂÂ°Ã¨ÂÂ´Ã¨ÂÂÃ¤Â¹Â\"></td></tr></table></form></div></div></body></html>");
 #endif
 	wifiConfigHtml = F("<html><head><meta http-equiv='Content-Type' content='text/html;'><title>MKS WIFI</title><style>body{background: #b5ff6a;}.config{margin: 150px auto;width: 600px;height: 600px;overflow: hidden;</style></head>");
 	wifiConfigHtml += F("<body><div class='config'></caption><br /><h2>Update</h2>");
@@ -2713,7 +2716,12 @@ void qqsHandleStatus()
 	j += F(",\"mac\":\""); j += WiFi.macAddress(); j += '"';
 	j += F(",\"printing\":"); j += (gPrinterInf.print_state != PRINTER_IDLE) ? 1 : 0;
 	j += F(",\"busy\":"); j += (transfer_file_flag || transfer_state != TRANSFER_IDLE) ? 1 : 0;
+	// The board's M2012 reply (Marlin QQS v3.2.13+): "s=.. p=.. ..." and the file name; age in ms (-1 = never)
+	j += F(",\"pr\":"); qqsJsonStr(j, qqsPrinterLine.c_str());
+	j += F(",\"pn\":"); qqsJsonStr(j, qqsPrinterName.c_str());
+	j += F(",\"age\":"); j += qqsPrinterMs ? (long)(millis() - qqsPrinterMs) : -1L;
 	j += '}';
+	qqsWebMs = millis(); if (!qqsWebMs) qqsWebMs = 1;
 	server.sendHeader(F("Cache-Control"), F("no-cache"));
 	server.send(200, F("application/json; charset=utf-8"), j);
 }
@@ -2843,7 +2851,7 @@ static void extract_file_item_cloud(File dataFile, String fileStr)
 }
 #if 1
 
-//篓娄????隆颅???篓娄???2鈧??隆庐篓娄??篓篓隆矛????篓娄篓C?篓篓隆陋隆毛?1a?隆矛???隆颅???篓娄???隆陋-?隆盲?篓娄?篓C?隆庐???-GET??隆掳????鈧∶????
+//Ã§Â¯ÂÃ¥Â¨Â????Ã©ÂÂÃ©Â¢Â???Ã§Â¯ÂÃ¥Â¨Â???2Ã©ÂÂ§??Ã©ÂÂÃ¥ÂºÂÃ§Â¯ÂÃ¥Â¨Â??Ã§Â¯ÂÃ§Â¯ÂÃ©ÂÂÃ§ÂÂ????Ã§Â¯ÂÃ¥Â¨ÂÃ§Â¯ÂC?Ã§Â¯ÂÃ§Â¯ÂÃ©ÂÂÃ©ÂÂÃ©ÂÂÃ¦Â¯Â?1a?Ã©ÂÂÃ§ÂÂ???Ã©ÂÂÃ©Â¢Â???Ã§Â¯ÂÃ¥Â¨Â???Ã©ÂÂÃ©ÂÂ-?Ã©ÂÂÃ§ÂÂ²?Ã§Â¯ÂÃ¥Â¨Â?Ã§Â¯ÂC?Ã©ÂÂÃ¥ÂºÂ???-GET??Ã©ÂÂÃ¦ÂÂ³????Ã©ÂÂ§Ã®ÂÂÃ¢ÂÂ¶????
 void fsHandler()
 {
 	String path = server.uri();
@@ -2881,11 +2889,13 @@ void fsHandler()
 	else if (path.endsWith(".css") || path.endsWith(".css.gz")) dataType = F("text/css");
 	else if (path.endsWith(".js") || path.endsWith(".js.gz")) dataType = F("application/javascript");
 	else if (!addedGz && path.endsWith(".gz")) dataType = F("application/x-gzip");
-	else if ( path.endsWith(".png")) dataType = F("application/x-png");
+	else if ( path.endsWith(".png")) dataType = F("image/png");      // QQS-Pro: was application/x-png
 	else if ( path.endsWith(".ico")) dataType = F("image/x-icon");
+	else if ( path.endsWith(".gif")) dataType = F("image/gif");      // QQS-Pro: web page animations
+	if (dataType.startsWith("image/")) server.sendHeader(F("Cache-Control"), F("max-age=86400"));   // QQS-Pro
 
 
-	/*篓娄????隆矛???html篓娄????|??? */
+	/*Ã§Â¯ÂÃ¥Â¨Â????Ã©ÂÂÃ§ÂÂ???htmlÃ§Â¯ÂÃ¥Â¨Â????|??? */
 	server.streamFile(dataFile, dataType);
 
 

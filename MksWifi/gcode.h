@@ -26,17 +26,17 @@ typedef struct
 
 typedef struct
 {
-	float curSprayerTemp[2];	// 2����ͷ�¶�
-	float curBedTemp;	//�ȴ��¶�
-	float desireSprayerTemp[2];// 2����ͷĿ���¶�
-	float desireBedTemp;// �ȴ�Ŀ���¶�
+	float curSprayerTemp[2];	// 2¸öÅçÍ·ÎÂ¶È
+	float curBedTemp;	//ÈÈ´²ÎÂ¶È
+	float desireSprayerTemp[2];// 2¸öÅçÍ·Ä¿±êÎÂ¶È
+	float desireBedTemp;// ÈÈ´²Ä¿±êÎÂ¶È
 	
 	String sd_file_list;
-	//String sd_file_list_t; //����
+	//String sd_file_list_t; //»º´æ
 	//String udisk_file_list;	
-	//String udisk_file_list_t;//����
+	//String udisk_file_list_t;//»º´æ
 
-	PRINT_STATE print_state;	//��ӡ״̬
+	PRINT_STATE print_state;	//´òÓ¡×´Ì¬
 	PRINT_FILE_INF print_file_inf;
 
 	
@@ -46,6 +46,9 @@ extern char M3_TYPE;
 extern boolean GET_VERSION_OK;
 
 extern PRINT_INF gPrinterInf;
+extern String qqsPrinterLine, qqsPrinterName;   // QQS-Pro: M2012 reply (status line, file name)
+extern uint32_t qqsPrinterMs;
+extern uint32_t qqsWebMs;                        // QQS-Pro: last /status request (faster polling while a page is open)
 extern bool file_list_flag;
 extern bool getting_file_flag;
 

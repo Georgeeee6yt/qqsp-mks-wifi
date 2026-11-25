@@ -128,6 +128,8 @@ void strDelChar(char *a, int32_t len, char ch)
 static uint8_t get_temper_flg = 0;
 uint8_t FanSpeed_bak = 0;
 
+String qqsPrinterLine, qqsPrinterName;   // QQS-Pro: last M2012 reply
+uint32_t qqsPrinterMs = 0;
 bool file_list_flag = false;
 bool getting_file_flag = false;
 
@@ -154,6 +156,10 @@ void paser_cmd(uint8_t *cmdRxBuf)
 
 	String line((const char *)cmdRxBuf);
 	//line.trim();
+
+	// QQS-Pro: M2012 replies, kept for the web page (/status)
+	if (line.startsWith("QQS s=")) { line.trim(); qqsPrinterLine = line.substring(4); qqsPrinterMs = millis(); return; }
+	if (line.startsWith("QQSN ")) { line.trim(); qqsPrinterName = line.substring(5); return; }
 
 	
 	
@@ -317,7 +323,7 @@ void paser_cmd(uint8_t *cmdRxBuf)
 		}
 		if(num_valid)
 		{
-			if(DecStr2Float(tempBuf, &tmpTemp) !=   0)//��ǰ�¶�
+			if(DecStr2Float(tempBuf, &tmpTemp) !=   0)//ï¿½ï¿½Ç°ï¿½Â¶ï¿½
 			{
 				//if((int)tmpTemp != 0)
 				{
@@ -364,7 +370,7 @@ void paser_cmd(uint8_t *cmdRxBuf)
 				}
 				if(num_valid)
 				{
-					if(DecStr2Float(tempBuf, &tmpTemp)	 !=   0)//Ŀ���¶�
+					if(DecStr2Float(tempBuf, &tmpTemp)	 !=   0)//Ä¿ï¿½ï¿½ï¿½Â¶ï¿½
 					{
 						//if((int)tmpTemp != 0)
 						{
