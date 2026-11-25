@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QQ-S Pro</title>
+<link rel="icon" href="data:,">
+<style>
+:root{--bg:#161616;--card:#222;--line:#333;--tx:#eee;--mut:#9a9a9a;--acc:#ff8c28;--ok:#4cc38a;--bad:#ff5a5a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,"Segoe UI","Noto Sans TC","Microsoft JhengHei",sans-serif}
+header{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+header h1{font-size:18px;margin:0;color:var(--acc);font-weight:700}
+#st{margin-left:auto;font-size:13px;color:var(--mut);text-align:right}
+main{max-width:560px;margin:0 auto;padding:12px}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+h2{font-size:16px;margin:0 0 10px}
+.mut{color:var(--mut);font-size:13px}
+button{font:inherit;border-radius:8px;border:1px solid var(--acc);background:transparent;color:var(--acc);padding:8px 14px;cursor:pointer}
+button.pri{background:var(--acc);color:#111;font-weight:700}
+button:disabled{opacity:.4;cursor:default}
+input[type=text],input[type=password]{width:100%;font:inherit;padding:9px 10px;border-radius:8px;border:1px solid var(--line);background:#111;color:var(--tx)}
+label{display:block;margin:10px 0 4px;font-size:13px;color:var(--mut)}
+#drop{border:2px dashed var(--line);border-radius:10px;padding:22px 12px;text-align:center;cursor:pointer}
+#drop.on{border-color:var(--acc)}
+.bar{height:8px;background:#111;border-radius:4px;overflow:hidden;margin:10px 0 4px}
+.bar i{display:block;height:100%;width:0;background:var(--acc)}
+#list{margin:8px 0 0;padding:0;list-style:none;max-height:300px;overflow:auto}
+#list li{display:flex;align-items:center;gap:10px;padding:9px 6px;border-bottom:1px solid var(--line);cursor:pointer}
+#list li:hover,#list li.sel{background:#2c2c2c}
+#list .n{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sig{display:inline-flex;align-items:flex-end;gap:2px;height:14px}
+.sig b{width:3px;background:#444;border-radius:1px}
+.sig b.on{background:var(--acc)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;border-radius:0;color:var(--mut)}
+.seg button.on{background:var(--acc);color:#111}
+.msg{margin-top:8px;font-size:14px;min-height:1.5em}
+.ok{color:var(--ok)}.bad{color:var(--bad)}
+footer{text-align:center;padding:4px 0 20px}
+footer a{color:var(--mut);font-size:13px}
+</style>
+</head>
+<body>
+<header><h1>QQ-S Pro</h1><div id="st">讀取中…</div></header>
+<main>
+
+<section>
+  <h2>上傳 G-code</h2>
+  <div id="drop">點這裡選檔案，或把檔案拖進來<br><span class="mut">存到印表機的 SD 卡</span></div>
+  <input type="file" id="file" accept=".gcode,.gco,.g,.GCODE,.GCO,.G" hidden>
+  <div id="up" hidden>
+    <div class="row"><span id="fname" class="n"></span></div>
+    <div class="bar"><i id="pb"></i></div>
+    <div class="mut" id="pinfo"></div>
+  </div>
+  <div class="msg" id="umsg"></div>
+</section>
+
+<section>
+  <h2>Wi-Fi 設定</h2>
+  <div class="row">
+    <div class="seg"><button id="mSta" class="on">連到家裡的網路</button><button id="mAp">自己開熱點</button></div>
+  </div>
+
+  <div id="staBox">
+    <div class="row" style="margin-top:10px"><button id="scan">掃描附近的網路</button><span class="mut" id="smsg"></span></div>
+    <ul id="list"></ul>
+    <label for="ssid">網路名稱</label>
+    <input type="text" id="ssid" maxlength="31" autocomplete="off" autocapitalize="off" spellcheck="false">
+  </div>
+  <div id="apBox" hidden>
+    <label for="apname">熱點名稱</label>
+    <input type="text" id="apname" maxlength="31" value="QQS-Pro" autocomplete="off" autocapitalize="off" spellcheck="false">
+  </div>
+  <label for="pw" id="pwl">密碼</label>
+  <div class="row" style="flex-wrap:nowrap">
+    <input type="password" id="pw" maxlength="63" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <button id="eye" title="顯示密碼" style="padding:8px 10px;white-space:nowrap;flex-shrink:0">顯示</button>
+  </div>
+  <div class="mut" id="pwh"></div>
+  <div class="row" style="margin-top:14px"><button id="apply" class="pri">套用並重開模組</button></div>
+  <div class="msg" id="wmsg"></div>
+</section>
+
+<footer><a href="/config.htm">原本的 MKS 設定頁（更新模組韌體／網頁）</a></footer>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let st = null, uploading = false, mode = 'sta';
+
+function bars(rssi) {
+  const n = rssi >= -55 ? 4 : rssi >= -67 ? 3 : rssi >= -78 ? 2 : 1;
+  let h = '<span class="sig">';
+  for (let i = 1; i <= 4; i++) h += '<b class="' + (i <= n ? 'on' : '') + '" style="height:' + (3 + i * 3) + 'px"></b>';
+  return h + '</span>';
+}
+function esc(s) { return s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function msg(el, text, cls) { el.className = 'msg ' + (cls || ''); el.textContent = text; }
+
+async function status() {
+  if (uploading) return;
+  try {
+    const r = await fetch('/status', {cache: 'no-store'});
+    st = await r.json();
+    $('st').innerHTML = esc(st.ip) + '<br>' + (st.mode === 'ap' ? '熱點 ' + esc(st.ssid) : esc(st.ssid) + ' ' + bars(st.rssi));
+    if (!uploading) {
+      $('drop').style.opacity = st.printing ? .4 : 1;
+      if (st.printing) msg($('umsg'), '列印中不能上傳', 'bad');
+      else if ($('umsg').textContent === '列印中不能上傳') msg($('umsg'), '');
+    }
+  } catch (e) { $('st').textContent = '連不到模組'; }
+}
+
+// ---- upload ----
+$('drop').onclick = () => { if (!uploading) $('file').click(); };
+$('drop').ondragover = e => { e.preventDefault(); $('drop').classList.add('on'); };
+$('drop').ondragleave = () => $('drop').classList.remove('on');
+$('drop').ondrop = e => { e.preventDefault(); $('drop').classList.remove('on'); if (e.dataTransfer.files[0]) upload(e.dataTransfer.files[0]); };
+$('file').onchange = () => { if ($('file').files[0]) upload($('file').files[0]); $('file').value = ''; };
+
+function upload(f) {
+  if (uploading) return;
+  if (st && st.printing) { msg($('umsg'), '列印中不能上傳', 'bad'); return; }
+  uploading = true;
+  $('up').hidden = false; $('fname').textContent = f.name; $('pb').style.width = '0';
+  msg($('umsg'), '');
+  const t0 = Date.now();
+  const x = new XMLHttpRequest();
+  x.open('POST', '/upload?X-Filename=' + encodeURIComponent(f.name));
+  x.upload.onprogress = e => {
+    if (!e.lengthComputable) return;
+    const p = e.loaded / e.total, s = (Date.now() - t0) / 1000, kbs = s > 0 ? e.loaded / 1024 / s : 0;
+    $('pb').style.width = (p * 100).toFixed(1) + '%';
+    const left = kbs > 0 ? Math.round((e.total - e.loaded) / 1024 / kbs) : 0;
+    $('pinfo').textContent = (e.loaded / 1048576).toFixed(1) + ' / ' + (e.total / 1048576).toFixed(1) + ' MB　' + kbs.toFixed(0) + ' KB/s　還要約 ' + Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0');
+  };
+  x.onload = () => {
+    uploading = false;
+    let ok = x.status === 200;
+    try { ok = ok && JSON.parse(x.responseText).err === 0; } catch (e) {}
+    if (ok) { $('pb').style.width = '100%'; msg($('umsg'), '已存到 SD 卡：' + f.name + '（' + ((Date.now() - t0) / 1000).toFixed(0) + ' 秒）', 'ok'); }
+    else if (x.status === 409) msg($('umsg'), '印表機正在列印或傳檔，等一下再傳', 'bad');
+    else msg($('umsg'), '上傳失敗（' + x.status + '）：印表機沒有接收，請看印表機畫面', 'bad');
+    status();
+  };
+  x.onerror = () => { uploading = false; msg($('umsg'), '連線中斷，上傳沒有完成', 'bad'); status(); };
+  x.send(f);
+}
+
+// ---- Wi-Fi ----
+function setMode(m) {
+  mode = m;
+  $('mSta').className = m === 'sta' ? 'on' : ''; $('mAp').className = m === 'ap' ? 'on' : '';
+  $('staBox').hidden = m !== 'sta'; $('apBox').hidden = m !== 'ap';
+  $('pwl').textContent = m === 'ap' ? '熱點密碼（空白＝不設密碼）' : '密碼';
+  $('pwh').textContent = m === 'ap' ? '要設密碼的話至少 8 個字。之後用手機連這個熱點，網址通常是 192.168.4.1。' : '';
+}
+$('mSta').onclick = () => setMode('sta');
+$('mAp').onclick = () => setMode('ap');
+$('eye').onclick = () => { const t = $('pw').type === 'password'; $('pw').type = t ? 'text' : 'password'; $('eye').textContent = t ? '隱藏' : '顯示'; };
+
+$('scan').onclick = async () => {
+  $('scan').disabled = true; $('smsg').textContent = '掃描中（約 3 秒）…'; $('list').innerHTML = '';
+  try {
+    const r = await fetch('/scan', {cache: 'no-store'});
+    const nets = await r.json();
+    $('smsg').textContent = nets.length ? '找到 ' + nets.length + ' 個' : '沒有找到網路';
+    for (const n of nets) {
+      const li = document.createElement('li');
+      li.innerHTML = bars(n.rssi) + '<span class="n">' + esc(n.ssid) + '</span>' + (n.enc ? '<span class="mut">🔒</span>' : '<span class="mut">開放</span>');
+      li.onclick = () => {
+        for (const o of $('list').children) o.classList.remove('sel');
+        li.classList.add('sel'); $('ssid').value = n.ssid; $('pw').value = ''; if (n.enc) $('pw').focus();
+      };
+      $('list').appendChild(li);
+    }
+  } catch (e) { $('smsg').textContent = '掃描失敗'; }
+  $('scan').disabled = false;
+};
+
+$('apply').onclick = async () => {
+  const name = (mode === 'ap' ? $('apname').value : $('ssid').value).trim(), pw = $('pw').value;
+  if (!name) { msg($('wmsg'), mode === 'ap' ? '請輸入熱點名稱' : '請選一個網路或輸入名稱', 'bad'); return; }
+  if (mode === 'ap' && pw.length > 0 && pw.length < 8) { msg($('wmsg'), '熱點密碼至少 8 個字（或留空）', 'bad'); return; }
+  const what = mode === 'ap' ? '改成自己開熱點「' + name + '」' : '連到「' + name + '」';
+  if (!confirm(what + '？\n\n模組會存檔並重開，這個頁面會斷線。' + (mode === 'sta' ? '連上後的新 IP 請看印表機的 Wi-Fi 分頁。\n連不上的話，模組大約 30 秒後會自己開一個 MKSWIFI 開頭的熱點，也可以在印表機上重新設定。' : '\n重開後請用手機連熱點，網址通常是 192.168.4.1。'))) return;
+  $('apply').disabled = true;
+  const q = 'wifi_mode=' + (mode === 'ap' ? 'wifi_mode_ap' : 'wifi_mode_sta') + '&hidden_ssid=' + encodeURIComponent(name) + '&password=' + encodeURIComponent(pw);
+  try {
+    const r = await fetch('/update_cfg?' + q, {cache: 'no-store'});
+    const t = await r.text();
+    if (r.ok && /success/i.test(t)) msg($('wmsg'), '已存檔，模組重開中。' + (mode === 'sta' ? '新的 IP 會顯示在印表機的 Wi-Fi 分頁。' : '請改連熱點「' + name + '」。'), 'ok');
+    else msg($('wmsg'), '模組沒有接受：' + t.replace(/<[^>]+>/g, ' ').trim(), 'bad');
+  } catch (e) { msg($('wmsg'), '已送出，模組應該正在重開。', 'ok'); }
+  $('apply').disabled = false;
+};
+
+setMode('sta');
+status();
+setInterval(status, 10000);
+</script>
+</body>
+</html>
