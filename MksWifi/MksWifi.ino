@@ -20,7 +20,7 @@ extern "C" {
 #include "user_interface.h"     // for struct rst_info
 }
 
-char* firmwareVersion = "C1.0.4_201109_beta";
+char* firmwareVersion = "QQS1.0_251125";   // QQS-Pro build of C1.0.4_201109_beta (see QQS_CHANGES.md)
 
 
 
@@ -230,6 +230,8 @@ void StartAccessPoint();
 void SendInfoToSam();
 bool TryToConnect();
 void onWifiConfig();
+void qqsHandleScan();
+void qqsHandleStatus();
 
 void cloud_down_file(const char *url);
 
@@ -2655,13 +2657,86 @@ uint8_t refreshApWeb()
 
 char hidden_ssid[32] = {0};
 
+// ---- QQS-Pro: JSON helpers for the web page ----
+static void qqsJsonStr(String &j, const char *s)
+{
+	j += '"';
+	for (; *s; s++) {
+		const uint8_t c = (uint8_t)*s;
+		if (c == '"' || c == '\\') { j += '\\'; j += (char)c; }
+		else if (c < 0x20) { char b[8]; sprintf(b, "\\u%04x", c); j += b; }
+		else j += (char)c;
+	}
+	j += '"';
+}
+
+// GET /scan -> [{"ssid":"..","rssi":-60,"enc":1,"ch":6}, ...], strongest first, one entry per name.
+// In hotspot mode the scan runs with AP+STA, so the phone that asked stays connected.
+void qqsHandleScan()
+{
+	if ((WiFi.getMode() & WIFI_AP) && !(WiFi.getMode() & WIFI_STA)) WiFi.mode(WIFI_AP_STA);
+	const int n = WiFi.scanNetworks();
+	int idx[32]; int m = 0;
+	for (int i = 0; i < n && m < 32; i++) {
+		if (WiFi.SSID(i).length() == 0) continue;
+		int k = 0;
+		for (; k < m; k++) if (WiFi.SSID(idx[k]) == WiFi.SSID(i)) break;
+		if (k < m) { if (WiFi.RSSI(i) > WiFi.RSSI(idx[k])) idx[k] = i; continue; }
+		idx[m++] = i;
+	}
+	for (int a = 1; a < m; a++) for (int b = a; b > 0 && WiFi.RSSI(idx[b]) > WiFi.RSSI(idx[b - 1]); b--) { int t = idx[b]; idx[b] = idx[b - 1]; idx[b - 1] = t; }
+	String j = "[";
+	for (int k = 0; k < m; k++) {
+		const int i = idx[k];
+		if (k) j += ',';
+		j += F("{\"ssid\":"); qqsJsonStr(j, WiFi.SSID(i).c_str());
+		j += F(",\"rssi\":"); j += WiFi.RSSI(i);
+		j += F(",\"enc\":"); j += (WiFi.encryptionType(i) == ENC_TYPE_NONE ? 0 : 1);
+		j += F(",\"ch\":"); j += WiFi.channel(i);
+		j += '}';
+	}
+	j += ']';
+	WiFi.scanDelete();
+	server.sendHeader(F("Cache-Control"), F("no-cache"));
+	server.send(200, F("application/json; charset=utf-8"), j);
+}
+
+// GET /status -> what the module is doing (no password)
+void qqsHandleStatus()
+{
+	const bool ap = currentState == OperatingState::AccessPoint;
+	String j = F("{\"ver\":"); qqsJsonStr(j, firmwareVersion);
+	j += F(",\"mode\":\""); j += ap ? F("ap") : F("sta"); j += '"';
+	j += F(",\"ssid\":"); qqsJsonStr(j, ap ? softApName : ssid);
+	j += F(",\"ip\":\""); j += (ap ? WiFi.softAPIP() : WiFi.localIP()).toString(); j += '"';
+	j += F(",\"rssi\":"); j += ap ? 0 : WiFi.RSSI();
+	j += F(",\"mac\":\""); j += WiFi.macAddress(); j += '"';
+	j += F(",\"printing\":"); j += (gPrinterInf.print_state != PRINTER_IDLE) ? 1 : 0;
+	j += F(",\"busy\":"); j += (transfer_file_flag || transfer_state != TRANSFER_IDLE) ? 1 : 0;
+	j += '}';
+	server.sendHeader(F("Cache-Control"), F("no-cache"));
+	server.send(200, F("application/json; charset=utf-8"), j);
+}
+
 void onWifiConfig()
 {
 	uint8_t num_ssids =	refreshApWeb();
 
+	// QQS-Pro: "/" shows index.htm from SPIFFS when there is one (our page); the built-in page stays at
+	// /config.htm (and /update_sketch, /update_spiffs) so a broken page can always be replaced.
+	SPIFFS.begin();
 	server.on("/", HTTP_GET, []() {
+		if (SPIFFS.exists("/index.htm")) {
+			File f = SPIFFS.open("/index.htm", "r");
+			if (f) { server.streamFile(f, F("text/html; charset=utf-8")); f.close(); return; }
+		}
 		server.send(200, FPSTR(STR_MIME_TEXT_HTML), wifiConfigHtml);
 	});
+	server.on("/config.htm", HTTP_GET, []() {
+		server.send(200, FPSTR(STR_MIME_TEXT_HTML), wifiConfigHtml);
+	});
+	server.on("/scan", HTTP_GET, qqsHandleScan);
+	server.on("/status", HTTP_GET, qqsHandleStatus);
 	server.on("/update_sketch", HTTP_GET, []() {
 		server.send(200, FPSTR(STR_MIME_TEXT_HTML), wifiConfigHtml);
 	});
@@ -2679,8 +2754,7 @@ void onWifiConfig()
 			return;
 		}
 		for (uint8_t e = 0; e < server.args(); e++) {
-			String argument = server.arg(e);
-			urldecode(argument);
+			String argument = server.arg(e);   // QQS-Pro: already decoded by the server (was decoded twice: "+" became " ")
 			if (server.argName(e) == "password") argument.toCharArray(pass, 64);//pass = server.arg(e);
 			else if (server.argName(e) == "ssid") argument.toCharArray(ssid, 32);//ssid = server.arg(e);
 			else if (server.argName(e) == "hidden_ssid") argument.toCharArray(hidden_ssid, 32);//ssid = server.arg(e);
