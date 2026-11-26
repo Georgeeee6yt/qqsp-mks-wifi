@@ -15,6 +15,7 @@ First commit = the published source unchanged; later commits = QQS-Pro changes (
 - QQS1.1: the 5 s status poll also sends `M2012` (Marlin QQS v3.2.13+). Its reply lines `QQS s=… p=… …` and
   `QQSN <file name>` are kept (not passed on) and returned by `/status` as `pr`, `pn` and `age` (ms since the last
   `QQS` line, -1 = never: older board firmware). While a page asks for `/status` (last 30 s) the poll runs every 2 s.
+- QQS1.4: DHCP host name `QQS-Pro` (`WiFi.hostname()` before both `WiFi.begin()`); routers listed `ESP_xxxxxx`.
 - QQS1.3: the SD list JSON is freed once `/files` has handed it out (or timed out). QQS1.2 kept it (up to
   ~8 KB, and the page lists the root on every load); with a print running the heap got so low that new
   connections were closed unanswered (ERR_EMPTY_RESPONSE). `/status` also gives `hmin`, the lowest free heap

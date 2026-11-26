@@ -20,7 +20,8 @@ extern "C" {
 #include "user_interface.h"     // for struct rst_info
 }
 
-char* firmwareVersion = "QQS1.3_251126";   // QQS-Pro build of C1.0.4_201109_beta (see QQS_CHANGES.md)
+char* firmwareVersion = "QQS1.4_251126";   // QQS-Pro build of C1.0.4_201109_beta (see QQS_CHANGES.md)
+#define QQS_HOSTNAME "QQS-Pro"   // DHCP host name (letters, digits, "-"; router lists show it)
 
 
 
@@ -2129,6 +2130,7 @@ static void wifi_ctrl_msg_handle(uint8_t * msg, uint16_t msgLen)
 	{
 		if(!WiFi.isConnected())
 		{
+			WiFi.hostname(QQS_HOSTNAME);
 			WiFi.begin(ssid, pass);
 		}
 	}
@@ -2562,6 +2564,7 @@ bool TryToConnect()
 			WiFi.config(ip_static, gateway_staic, subnet_static, dns_static, (uint32_t)0x00000000);
 		}
 
+		WiFi.hostname(QQS_HOSTNAME);   // QQS1.4: the name routers show (was ESP_xxxxxx)
 		WiFi.begin(ssid, pass);
 
 		
