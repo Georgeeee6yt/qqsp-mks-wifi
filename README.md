@@ -15,6 +15,10 @@ First commit = the published source unchanged; later commits = QQS-Pro changes (
 - QQS1.1: the 5 s status poll also sends `M2012` (Marlin QQS v3.2.13+). Its reply lines `QQS s=… p=… …` and
   `QQSN <file name>` are kept (not passed on) and returned by `/status` as `pr`, `pn` and `age` (ms since the last
   `QQS` line, -1 = never: older board firmware). While a page asks for `/status` (last 30 s) the poll runs every 2 s.
+- QQS1.3: the SD list JSON is freed once `/files` has handed it out (or timed out). QQS1.2 kept it (up to
+  ~8 KB, and the page lists the root on every load); with a print running the heap got so low that new
+  connections were closed unanswered (ERR_EMPTY_RESPONSE). `/status` also gives `hmin`, the lowest free heap
+  `loop()` has seen since boot; the page shows both at the bottom.
 - QQS1.2: the board's `QQS…` reply lines are taken in `transfer_msg_handle` before anything else (one line per
   packet, up to 1 KB, not passed on to TCP clients). `GET /files?go=1&d=<hex 8.3 path>` sends `M2013 H<hex>`;
   `GET /files` returns `{"st":"wait"|"ok"|"timeout"|"busy", "d", "code", "total", "got", "f":[[dir,size,"hex 8.3",

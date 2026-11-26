@@ -134,7 +134,7 @@ footer a{color:var(--mut);font-size:13px}
   <div class="msg" id="wmsg"></div>
 </section>
 
-<footer><a href="/config.htm">原本的 MKS 設定頁（更新模組韌體／網頁）</a></footer>
+<footer><a href="/config.htm">原本的 MKS 設定頁（更新模組韌體／網頁）</a><br><span id="mem"></span></footer>
 </main>
 
 <script>
@@ -198,6 +198,7 @@ async function status() {
     st = await r.json();
     printer(st);
     $('st').innerHTML = esc(st.ip) + '<br>' + (st.mode === 'ap' ? '熱點 ' + esc(st.ssid) : esc(st.ssid) + ' ' + bars(st.rssi));
+    if (st.heap) $('mem').textContent = '模組 ' + esc(st.ver || '') + '　可用記憶體 ' + (st.heap / 1024).toFixed(1) + ' KB' + (st.hmin ? '（最低 ' + (st.hmin / 1024).toFixed(1) + ' KB）' : '');
     if (!uploading) {
       $('drop').style.opacity = st.printing ? .4 : 1;
       if (st.printing) msg($('umsg'), '列印中不能上傳', 'bad');

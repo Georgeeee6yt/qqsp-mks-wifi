@@ -20,7 +20,7 @@ extern "C" {
 #include "user_interface.h"     // for struct rst_info
 }
 
-char* firmwareVersion = "QQS1.2_251126";   // QQS-Pro build of C1.0.4_201109_beta (see QQS_CHANGES.md)
+char* firmwareVersion = "QQS1.3_251126";   // QQS-Pro build of C1.0.4_201109_beta (see QQS_CHANGES.md)
 
 
 
@@ -791,9 +791,12 @@ int get_printer_reply()
 
 }
 
+uint32_t qqsHeapMin = 0xFFFFFFFF;   // QQS1.3: lowest free heap seen by loop() since boot (/status "hmin")
+
 void loop()
 {
 	int i;
+	{ const uint32_t h = ESP.getFreeHeap(); if (h < qqsHeapMin) qqsHeapMin = h; }
 
 	//output_json();
 	
@@ -2728,6 +2731,7 @@ void qqsHandleStatus()
 	j += F(",\"pn\":"); qqsJsonStr(j, qqsPrinterName.c_str());
 	j += F(",\"age\":"); j += qqsPrinterMs ? (long)(millis() - qqsPrinterMs) : -1L;
 	j += F(",\"heap\":"); j += ESP.getFreeHeap();
+	j += F(",\"hmin\":"); j += qqsHeapMin;
 	j += '}';
 	qqsWebMs = millis(); if (!qqsWebMs) qqsWebMs = 1;
 	server.sendHeader(F("Cache-Control"), F("no-cache"));
@@ -2803,15 +2807,17 @@ void qqsHandleFiles()
 		if (transfer_file_flag || transfer_state != TRANSFER_IDLE) j = F("{\"st\":\"busy\"}");
 		else {
 			qqsList.on = true; qqsList.done = false; qqsList.code = 0; qqsList.got = qqsList.total = 0;
-			qqsList.t0 = millis(); qqsList.dir = d; qqsList.json = "";
+			qqsList.t0 = millis(); qqsList.dir = d; qqsList.json = String(); qqsList.json.reserve(1024);
 			package_gcode(String("M2013 H") + d + "\n", true);
 			j = F("{\"st\":\"wait\"}");
 		}
 	}
 	else if (!qqsList.on) j = F("{\"st\":\"none\"}");
 	else if (!qqsList.done) {
-		j = F("{\"st\":\""); j += (millis() - qqsList.t0 > 12000) ? F("timeout") : F("wait");
+		const bool late = millis() - qqsList.t0 > 12000;
+		j = F("{\"st\":\""); j += late ? F("timeout") : F("wait");
 		j += F("\",\"got\":"); j += qqsList.got; j += '}';
+		if (late) { qqsList.on = false; qqsList.json = String(); }   // QQS1.3: give the heap back
 	}
 	else {   // the list itself is streamed after the head, not copied (up to ~8 KB)
 		j = F("{\"st\":\"ok\",\"d\":\""); j += qqsList.dir;
@@ -2825,6 +2831,9 @@ void qqsHandleFiles()
 		server.send(200, F("application/json; charset=utf-8"), j);
 		server.sendContent(qqsList.json);
 		server.sendContent(F("]}"));
+		// QQS1.3: the list is read once; keeping it (up to ~8 KB, the page lists the root on every load) left
+		// too little heap while printing: new connections got ERR_EMPTY_RESPONSE (George 2026-11-26).
+		qqsList.on = false; qqsList.json = String();
 		return;
 	}
 	qqsWebMs = millis(); if (!qqsWebMs) qqsWebMs = 1;
