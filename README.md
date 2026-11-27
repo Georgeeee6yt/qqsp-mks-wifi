@@ -15,7 +15,10 @@ First commit = the published source unchanged; later commits = QQS-Pro changes (
 - QQS1.1: the 5 s status poll also sends `M2012` (Marlin QQS v3.2.13+). Its reply lines `QQS s=… p=… …` and
   `QQSN <file name>` are kept (not passed on) and returned by `/status` as `pr`, `pn` and `age` (ms since the last
   `QQS` line, -1 = never: older board firmware). While a page asks for `/status` (last 30 s) the poll runs every 2 s.
-- QQS1.5: lwIP rebuilt with `TCP_MSS=536` (`tools/lwip536/`, linked by `lwip.py` under the core's file name
+- QQS1.6: MSS 1240 instead of 536 (`tools/lwip/build.sh`, default `MSS=1240`). `TCP_WND` is num x `TCP_MSS`
+  (`espconn.c`), so 536 cut Wi-Fi uploads to 61 KB/s (QQS1.0 with 1460: 138 KB/s). 1240 + 40 = 1280, the
+  Tailscale tunnel MTU. The page is unchanged from QQS1.5.
+- QQS1.5: lwIP rebuilt with `TCP_MSS=536` (then `tools/lwip536/`, now `tools/lwip/`, linked by `lwip.py` under the core's file name
   `liblwip_gcc.a`, which the linker script maps to flash). With 1460 a phone reaching the module through a
   Tailscale subnet router (tunnel MTU 1280) got pages and images cut off half way, and the single-client server
   stayed stuck on that connection. `streamFile` now sends with a deadline (1.5 s per write, 8 s per file) and

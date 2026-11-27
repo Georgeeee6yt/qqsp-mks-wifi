@@ -20,7 +20,7 @@ extern "C" {
 #include "user_interface.h"     // for struct rst_info
 }
 
-char* firmwareVersion = "QQS1.5_251127";   // QQS-Pro build of C1.0.4_201109_beta (see QQS_CHANGES.md)
+char* firmwareVersion = "QQS1.6_251127";   // QQS-Pro build of C1.0.4_201109_beta (see QQS_CHANGES.md)
 #define QQS_HOSTNAME "QQS-Pro"   // DHCP host name (letters, digits, "-"; router lists show it)
 
 
