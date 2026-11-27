@@ -129,6 +129,8 @@ public:
   void servePrinter(bool b) { _servingPrinter = b; }
   uint32_t getPostLength() const { return _postLength; }
 
+#define QQS_SEND_CHUNK_MS 1500   // QQS1.5: longest wait for one write to be acknowledged (core default 5000)
+#define QQS_SEND_TOTAL_MS 8000   // QQS1.5: a whole file must be sent within this
 template<typename T> size_t streamFile(T &file, const String& contentType){
   setContentLength(file.size());
   if (String(file.name()).endsWith(".gz") &&
@@ -137,7 +139,20 @@ template<typename T> size_t streamFile(T &file, const String& contentType){
     sendHeader("Content-Encoding", "gzip");
   }
   send(200, contentType, "");
-  return _currentClient.write(file, HTTP_DOWNLOAD_UNIT_SIZE);
+  // QQS1.5: our own loop with a deadline. A client that stops acknowledging (a connection cut off half
+  // way, e.g. through a VPN that drops full-size segments) used to hold this single-client server for
+  // 5 s per chunk; now it is dropped after QQS_SEND_TOTAL_MS and the next request is served.
+  uint8_t buf[HTTP_DOWNLOAD_UNIT_SIZE];
+  const uint32_t t0 = millis();
+  size_t done = 0;
+  while (file.available()) {
+    const size_t n = file.read(buf, sizeof(buf));
+    if (!n) break;
+    const size_t w = _currentClient.write((const uint8_t *)buf, n);
+    done += w;
+    if (w != n || millis() - t0 > QQS_SEND_TOTAL_MS) { _currentClient.stop(); break; }
+  }
+  return done;
 }
 
   size_t readPostdata(WiFiClient& client, uint8_t *buffer, size_t buflen);

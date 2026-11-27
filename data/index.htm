@@ -191,11 +191,20 @@ function printer(st) {
   $('pnote').textContent = '';
 }
 
+// One request at a time, each with a time limit; after a failure wait longer (2, 4, 8, 15 s): the module
+// serves a single connection, so piling requests on a slow link only makes it worse (QQS1.5).
+async function tget(u, ms) {
+  const ac = new AbortController(), t = setTimeout(() => ac.abort(), ms);
+  try { return await fetch(u, {cache: 'no-store', signal: ac.signal}); } finally { clearTimeout(t); }
+}
+let stBusy = false, stFail = 0;
 async function status() {
-  if (uploading) return;
+  if (uploading || stBusy) return;
+  stBusy = true;
   try {
-    const r = await fetch('/status', {cache: 'no-store'});
+    const r = await tget('/status', 4000);
     st = await r.json();
+    stFail = 0;
     printer(st);
     $('st').innerHTML = esc(st.ip) + '<br>' + (st.mode === 'ap' ? '熱點 ' + esc(st.ssid) : esc(st.ssid) + ' ' + bars(st.rssi));
     if (st.heap) $('mem').textContent = '模組 ' + esc(st.ver || '') + '　可用記憶體 ' + (st.heap / 1024).toFixed(1) + ' KB' + (st.hmin ? '（最低 ' + (st.hmin / 1024).toFixed(1) + ' KB）' : '');
@@ -204,7 +213,8 @@ async function status() {
       if (st.printing) msg($('umsg'), '列印中不能上傳', 'bad');
       else if ($('umsg').textContent === '列印中不能上傳') msg($('umsg'), '');
     }
-  } catch (e) { $('st').textContent = '連不到模組'; }
+  } catch (e) { stFail++; $('st').textContent = '連不到模組'; }
+  finally { stBusy = false; }
 }
 
 // ---- upload ----
@@ -220,7 +230,7 @@ const hexOf = s => Array.from(new TextEncoder().encode(s), b => b.toString(16).p
 const pathHex = cs => cs.map(c => '2F' + c.hex).join('');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function fsz(b) { return b < 1048576 ? Math.max(1, Math.round(b / 1024)) + ' KB' : (b / 1048576).toFixed(1) + ' MB'; }
-async function jget(u) { const r = await fetch(u, {cache: 'no-store'}); return r.json(); }
+async function jget(u) { const r = await tget(u, 6000); return r.json(); }
 
 async function listDir(cs, quiet) {
   if (fbusy) return null;
@@ -413,7 +423,7 @@ setMode('sta');
 status();
 // The list after the animations have loaded (the module serves one request at a time)
 window.addEventListener('load', () => setTimeout(() => listDir([]), 300));
-setInterval(() => { if (document.visibilityState === 'visible') status(); }, 2000);
+(async () => { for (;;) { await sleep(stFail ? Math.min(2000 << stFail, 15000) : 2000); if (document.visibilityState === 'visible') await status(); } })();
 </script>
 </body>
 </html>

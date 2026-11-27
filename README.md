@@ -15,6 +15,12 @@ First commit = the published source unchanged; later commits = QQS-Pro changes (
 - QQS1.1: the 5 s status poll also sends `M2012` (Marlin QQS v3.2.13+). Its reply lines `QQS s=… p=… …` and
   `QQSN <file name>` are kept (not passed on) and returned by `/status` as `pr`, `pn` and `age` (ms since the last
   `QQS` line, -1 = never: older board firmware). While a page asks for `/status` (last 30 s) the poll runs every 2 s.
+- QQS1.5: lwIP rebuilt with `TCP_MSS=536` (`tools/lwip536/`, linked by `lwip.py` under the core's file name
+  `liblwip_gcc.a`, which the linker script maps to flash). With 1460 a phone reaching the module through a
+  Tailscale subnet router (tunnel MTU 1280) got pages and images cut off half way, and the single-client server
+  stayed stuck on that connection. `streamFile` now sends with a deadline (1.5 s per write, 8 s per file) and
+  drops a client that stops acknowledging; every connection gets `setTimeout(1500)`. The page polls `/status`
+  one request at a time with a 4 s limit and backs off (2, 4, 8, 15 s) after failures.
 - QQS1.4: DHCP host name `QQS-Pro` (`WiFi.hostname()` before both `WiFi.begin()`); routers listed `ESP_xxxxxx`.
 - QQS1.3: the SD list JSON is freed once `/files` has handed it out (or timed out). QQS1.2 kept it (up to
   ~8 KB, and the page lists the root on every load); with a print running the heap got so low that new

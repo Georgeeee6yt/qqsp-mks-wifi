@@ -149,6 +149,7 @@ void RepRapWebServer::handleClient() {
 #endif
 
     _currentClient = client;
+    _currentClient.setTimeout(QQS_SEND_CHUNK_MS);   // QQS1.5: writes (and request reads) give up sooner
     _currentStatus = HC_WAIT_READ;
     _statusChange = millis();
   }

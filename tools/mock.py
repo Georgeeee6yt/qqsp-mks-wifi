@@ -17,7 +17,7 @@ class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         u = urllib.parse.urlparse(self.path); q = urllib.parse.parse_qs(u.query)   # the ESP server decodes args once
         if u.path == '/': return self._send(200, open(os.path.join(ROOT, 'index.htm'), 'rb').read(), 'text/html; charset=utf-8')
-        if u.path == '/status': return self._send(200, json.dumps({'ver': 'QQS1.4_251126', 'mode': 'sta', 'ssid': 'CHT-家裡', 'ip': '192.168.1.117', 'rssi': -61, 'mac': 'AA', 'printing': state['printing'], 'busy': 0, 'pr': state['pr'], 'pn': state['pn'], 'age': state['age'], 'heap': 21384, 'hmin': 17920}, ensure_ascii=False))
+        if u.path == '/status': return self._send(200, json.dumps({'ver': 'QQS1.5_251127', 'mode': 'sta', 'ssid': 'CHT-家裡', 'ip': '192.168.1.117', 'rssi': -61, 'mac': 'AA', 'printing': state['printing'], 'busy': 0, 'pr': state['pr'], 'pn': state['pn'], 'age': state['age'], 'heap': 21384, 'hmin': 17920}, ensure_ascii=False))
         if u.path == '/mock':   # test hook: /mock?pr=...&pn=...&age=...&printing=...
             for k in ('pr', 'pn'): state[k] = q.get(k, [''])[0]
             state['age'] = int(q.get('age', ['-1'])[0]); state['printing'] = int(q.get('printing', ['0'])[0])
