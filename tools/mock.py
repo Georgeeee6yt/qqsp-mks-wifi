@@ -1,5 +1,6 @@
-import http.server, json, time, urllib.parse, sys, os
+import re, http.server, json, time, urllib.parse, sys, os
 ROOT = sys.argv[1]; LOG = sys.argv[2]
+CTL = {'r': -1, 't': 0, 'a': 0}
 state = {'printing': 0, 'pr': '', 'pn': '', 'age': -1}
 # Fake SD card, as Marlin v3.2.14 lists it (directory order; 8.3 names from a FAT image made with pyfatfs)
 SD = {'': [('f', 40, '___V3.GCO', '燈罩_v3.gcode'), ('f', 2345678, 'LAMPSHAD.GCO', 'lampshade_QQSPro_157mm.gcode'),
@@ -17,7 +18,7 @@ class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         u = urllib.parse.urlparse(self.path); q = urllib.parse.parse_qs(u.query)   # the ESP server decodes args once
         if u.path == '/': return self._send(200, open(os.path.join(ROOT, 'index.htm'), 'rb').read(), 'text/html; charset=utf-8')
-        if u.path == '/status': return self._send(200, json.dumps({'ver': 'QQS1.6_251127', 'mode': 'sta', 'ssid': 'CHT-家裡', 'ip': '192.168.1.117', 'rssi': -61, 'mac': 'AA', 'printing': state['printing'], 'busy': 0, 'pr': state['pr'], 'pn': state['pn'], 'age': state['age'], 'heap': 21384, 'hmin': 17920}, ensure_ascii=False))
+        if u.path == '/status': return self._send(200, json.dumps({'ver': 'QQS1.7_251127', 'mode': 'sta', 'ssid': 'CHT-家裡', 'ip': '192.168.1.117', 'rssi': -61, 'mac': 'AA', 'printing': state['printing'], 'busy': 0, 'pr': state['pr'], 'pn': state['pn'], 'age': state['age'], 'heap': 21384, 'hmin': 17920}, ensure_ascii=False))
         if u.path == '/mock':   # test hook: /mock?pr=...&pn=...&age=...&printing=...
             for k in ('pr', 'pn'): state[k] = q.get(k, [''])[0]
             state['age'] = int(q.get('age', ['-1'])[0]); state['printing'] = int(q.get('printing', ['0'])[0])
@@ -45,6 +46,19 @@ class H(http.server.BaseHTTPRequestHandler):
                 if PRINT['r'] == 0:
                     state.update(pr='s=2 p=0 e=3 r=-1 t=300/240 b=600/80 f=0 v=100 w=100 z=0 a=0', pn=ent[0][3], age=500, printing=1)
             return self._send(200, json.dumps({'r': PRINT['r'], 'ms': int((time.time() - PRINT['t']) * 1000)}))
+        if u.path == '/ctl':   # QQS1.7: pause / resume / stop like the board (M2015)
+            if 'go' in q:
+                a = int(q.get('a', ['0'])[0]); CTL.update(r=-1, t=time.time(), a=a)
+                with open(LOG, 'a') as lf: lf.write(json.dumps({'ctl': a}) + '\n')
+            elif CTL['r'] < 0 and time.time() - CTL['t'] > 0.4:
+                m = re.match(r's=(\d)', state['pr']); s_ = int(m.group(1)) if m else 0; a = CTL['a']
+                if a not in (1, 2, 3): CTL['r'] = 5
+                elif s_ == 4: CTL['r'] = 2
+                elif s_ == 0: CTL['r'] = 1
+                elif a == 3: CTL['r'] = 0; state['pr'] = re.sub(r's=\d', 's=4', state['pr'])
+                elif (a == 1) == (s_ == 3): CTL['r'] = 3
+                else: CTL['r'] = 0; state['pr'] = re.sub(r's=\d', 's=3' if a == 1 else 's=1', state['pr'])
+            return self._send(200, json.dumps({'r': CTL['r'], 'ms': int((time.time() - CTL['t']) * 1000)}))
         if u.path == '/scan':
             time.sleep(1.5)
             return self._send(200, json.dumps([{'ssid': 'CHT-家裡', 'rssi': -48, 'enc': 1, 'ch': 6}, {'ssid': 'Neighbor "5G"', 'rssi': -70, 'enc': 1, 'ch': 11}, {'ssid': 'FreeWiFi', 'rssi': -85, 'enc': 0, 'ch': 1}], ensure_ascii=False))

@@ -20,7 +20,7 @@ extern "C" {
 #include "user_interface.h"     // for struct rst_info
 }
 
-char* firmwareVersion = "QQS1.6_251127";   // QQS-Pro build of C1.0.4_201109_beta (see QQS_CHANGES.md)
+char* firmwareVersion = "QQS1.7_251127";   // QQS-Pro build of C1.0.4_201109_beta (see QQS_CHANGES.md)
 #define QQS_HOSTNAME "QQS-Pro"   // DHCP host name (letters, digits, "-"; router lists show it)
 
 
@@ -235,6 +235,7 @@ void qqsHandleScan();
 void qqsHandleStatus();
 void qqsHandleFiles();
 void qqsHandlePrint();
+void qqsHandleCtl();
 static bool qqsBoardLine(const uint8_t *msg, uint16_t len);
 
 void cloud_down_file(const char *url);
@@ -2752,6 +2753,8 @@ static struct {
 } qqsList;
 static int qqsPrintRes = -1;
 static uint32_t qqsPrintMs = 0;
+static int qqsCtlRes = -1;          // QQS1.7: answer to M2015 (pause / resume / stop), -1 = none yet
+static uint32_t qqsCtlMs = 0;
 
 // One line from the board starting with "QQS". false = not ours (handled as usual).
 static bool qqsBoardLine(const uint8_t *msg, uint16_t len)
@@ -2787,6 +2790,7 @@ static bool qqsBoardLine(const uint8_t *msg, uint16_t len)
 		return true;
 	}
 	if (line.startsWith("QQSP ")) { qqsPrintRes = line.substring(5).toInt(); return true; }
+	if (line.startsWith("QQSC ")) { qqsCtlRes = line.substring(5).toInt(); return true; }
 	return false;
 }
 
@@ -2861,6 +2865,24 @@ void qqsHandlePrint()
 	server.send(200, F("application/json"), j);
 }
 
+// QQS1.7: GET /ctl?go=1&a=<1 pause | 2 resume | 3 stop> sends "M2015 A<a>" (Marlin QQS v3.2.22+),
+// GET /ctl gives {"r":<code, -1 = no answer yet>,"ms":<ms since the request>}. The board does what its own
+// pause / resume / stop buttons do.
+void qqsHandleCtl()
+{
+	String j;
+	if (server.hasArg("go")) {
+		const int a = server.arg("a").toInt();
+		if (a < 1 || a > 3) { server.send(400, F("application/json"), F("{\"st\":\"bad\"}")); return; }
+		qqsCtlRes = -1; qqsCtlMs = millis();
+		package_gcode(String("M2015 A") + a + "\n", true);
+	}
+	j = F("{\"r\":"); j += qqsCtlRes;
+	j += F(",\"ms\":"); j += qqsCtlMs ? (long)(millis() - qqsCtlMs) : -1L; j += '}';
+	server.sendHeader(F("Cache-Control"), F("no-cache"));
+	server.send(200, F("application/json"), j);
+}
+
 void onWifiConfig()
 {
 	uint8_t num_ssids =	refreshApWeb();
@@ -2882,6 +2904,7 @@ void onWifiConfig()
 	server.on("/status", HTTP_GET, qqsHandleStatus);
 	server.on("/files", HTTP_GET, qqsHandleFiles);
 	server.on("/print", HTTP_GET, qqsHandlePrint);
+	server.on("/ctl", HTTP_GET, qqsHandleCtl);
 	server.on("/update_sketch", HTTP_GET, []() {
 		server.send(200, FPSTR(STR_MIME_TEXT_HTML), wifiConfigHtml);
 	});

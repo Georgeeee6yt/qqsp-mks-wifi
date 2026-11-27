@@ -15,6 +15,10 @@ First commit = the published source unchanged; later commits = QQS-Pro changes (
 - QQS1.1: the 5 s status poll also sends `M2012` (Marlin QQS v3.2.13+). Its reply lines `QQS s=… p=… …` and
   `QQSN <file name>` are kept (not passed on) and returned by `/status` as `pr`, `pn` and `age` (ms since the last
   `QQS` line, -1 = never: older board firmware). While a page asks for `/status` (last 30 s) the poll runs every 2 s.
+- QQS1.7: pause / resume / stop on the printer card. `GET /ctl?go=1&a=<1 pause|2 resume|3 stop>` sends
+  `M2015 A<a>` (important queue); the board answers `QQSC <code>` (0 done, 1 no print, 2 already stopping,
+  3 not paused / already paused, 4 nozzle cold, 5 bad argument, 6 busy); `GET /ctl` returns `{r, ms}`.
+  Needs board v3.2.22. Stop needs a second press within 4 s.
 - QQS1.6: MSS 1240 instead of 536 (`tools/lwip/build.sh`, default `MSS=1240`). `TCP_WND` is num x `TCP_MSS`
   (`espconn.c`), so 536 cut Wi-Fi uploads to 61 KB/s (QQS1.0 with 1460: 138 KB/s). 1240 + 40 = 1280, the
   Tailscale tunnel MTU. The page is unchanged from QQS1.5.

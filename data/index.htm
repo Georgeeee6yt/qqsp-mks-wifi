@@ -18,6 +18,9 @@ h2{font-size:16px;margin:0 0 10px}
 .mut{color:var(--mut);font-size:13px}
 button{font:inherit;border-radius:8px;border:1px solid var(--acc);background:transparent;color:var(--acc);padding:8px 14px;cursor:pointer}
 button.pri{background:var(--acc);color:#111;font-weight:700}
+button.stop{border-color:var(--bad);color:var(--bad)}button.stop.arm{background:var(--bad);color:#111;font-weight:700}
+#ctl{display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap}#ctl button{flex:1;min-width:110px;padding:12px}
+#ctl[hidden]{display:none!important}
 button:disabled{opacity:.4;cursor:default}
 input[type=text],input[type=password]{width:100%;font:inherit;padding:9px 10px;border-radius:8px;border:1px solid var(--line);background:#111;color:var(--tx)}
 label{display:block;margin:10px 0 4px;font-size:13px;color:var(--mut)}
@@ -86,6 +89,8 @@ footer a{color:var(--mut);font-size:13px}
     <div class="cd fan"><div class="k">風扇</div><div class="v" id="vf">--</div></div>
   </div>
   <div class="chips" id="chips" hidden><span class="chip" id="cv"></span><span class="chip" id="cw"></span><span class="chip" id="cz"></span></div>
+  <div id="ctl" hidden><button id="bpause">暫停</button><button id="bstop" class="stop">停止</button></div>
+  <div class="msg" id="cmsg"></div>
   <div class="mut" id="pnote" style="margin-top:6px"></div>
 </section>
 
@@ -160,7 +165,7 @@ function printer(st) {
   const kv = {};
   for (const t of (st.pr || '').split(' ')) { const i = t.indexOf('='); if (i > 0) kv[t.slice(0, i)] = t.slice(i + 1); }
   if (!('s' in kv)) {
-    setAnim('idle.gif'); $('job').hidden = true; $('chips').hidden = true;
+    setAnim('idle.gif'); $('job').hidden = true; $('chips').hidden = true; $('ctl').hidden = true; disarmStop();
     $('pstate').textContent = st.printing ? '列印中' : '閒置中';
     $('pnote').textContent = st.age < 0 ? '主板韌體 v3.2.13 以上才會顯示溫度和進度。' : '';
     return;
@@ -188,6 +193,15 @@ function printer(st) {
     $('cw').textContent = '流量 ' + kv.w + '%'; $('cw').className = 'chip' + (+kv.w !== 100 ? ' warn' : '');
     $('cz').textContent = 'Z 微調 ' + (z > 0 ? '+' : '') + z.toFixed(2); $('cz').className = 'chip' + (z ? ' warn' : '');
   }
+  // pause / resume / stop (QQS1.7, board v3.2.22+)
+  $('ctl').hidden = !job || stale;
+  if (job && !stale) {
+    $('bpause').textContent = s === 3 ? '繼續' : '暫停';
+    $('bpause').className = s === 3 ? 'pri' : '';
+    $('bpause').disabled = ctlBusy || s === 4;
+    $('bstop').disabled = ctlBusy || s === 4;
+    if (s === 4) disarmStop();
+  } else disarmStop();
   $('pnote').textContent = '';
 }
 
@@ -216,6 +230,35 @@ async function status() {
   } catch (e) { stFail++; $('st').textContent = '連不到模組'; }
   finally { stBusy = false; }
 }
+
+// ---- pause / resume / stop: the board does what its own buttons do (M2015) ----
+const CTL_ERR = {1: '目前沒有在列印', 2: '已經在停止了', 3: '狀態已經改變，請再看一次', 4: '噴頭沒在加熱，先在印表機上把溫度設回去',
+                 5: '參數錯誤', 6: '印表機正忙，稍後再按一次'};
+let ctlBusy = false, stopArm = 0;
+function disarmStop() { if (stopArm) { clearTimeout(stopArm); stopArm = 0; } $('bstop').textContent = '停止'; $('bstop').classList.remove('arm'); }
+async function ctl(a, what) {
+  ctlBusy = true; $('bpause').disabled = $('bstop').disabled = true;
+  msg($('cmsg'), what + '…');
+  let r = {r: -1};
+  try {
+    r = await jget('/ctl?go=1&a=' + a);
+    const t0 = Date.now();
+    while (r.r < 0 && Date.now() - t0 < 6000) { await sleep(300); r = await jget('/ctl'); }
+  } catch (e) { r = {r: -2}; }
+  ctlBusy = false;
+  if (r.r === 0) msg($('cmsg'), what + '：已送出', 'ok');
+  else msg($('cmsg'), r.r === -2 ? '連不到模組' : r.r < 0 ? '印表機沒有回應：主板韌體要 v3.2.22 以上' : (CTL_ERR[r.r] || '印表機拒絕（' + r.r + '）'), 'bad');
+  status();
+}
+$('bpause').onclick = () => { disarmStop(); ctl(st && /\bs=3\b/.test(st.pr || '') ? 2 : 1, $('bpause').textContent); };
+$('bstop').onclick = () => {
+  if (!stopArm) {   // first press arms it for 4 s; the second press stops
+    $('bstop').textContent = '確定停止？再按一次'; $('bstop').classList.add('arm');
+    stopArm = setTimeout(disarmStop, 4000);
+    return;
+  }
+  disarmStop(); ctl(3, '停止');
+};
 
 // ---- upload ----
 $('drop').onclick = () => { if (!uploading) $('file').click(); };
