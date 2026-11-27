@@ -4,6 +4,7 @@
 
 | 版本 | commit | 說明 |
 |---|---|---|
+| QQS1.6 | [`c7f65f1`](https://github.com/Georgeeee6yt/qqsp-mks-wifi/commit/c7f65f1f68c32c77ed2aadd518bfd44f4a63bdb3) | QQS1.6: lwIP MSS 1240 instead of 536 (upload speed) |
 | QQS1.5 | [`17b8927`](https://github.com/Georgeeee6yt/qqsp-mks-wifi/commit/17b8927fcb051cea3ca0006d9ab1d9184cb90e0f) | QQS1.5: lwIP with MSS 536; drop clients that stop acknowledging; page polls one request at a time |
 | QQS1.4 | [`a7ab8c6`](https://github.com/Georgeeee6yt/qqsp-mks-wifi/commit/a7ab8c6cd503f4500ae8705466732e61b4aeb273) | QQS1.4: DHCP host name QQS-Pro (routers showed ESP_xxxxxx) |
 | QQS1.3 | [`270f574`](https://github.com/Georgeeee6yt/qqsp-mks-wifi/commit/270f574c7e8f4196b04b31979fd7645c29bd34c2) | QQS1.3: free the SD list after /files hands it out; heap low-water mark |
@@ -20,5 +21,6 @@ git tag QQS1.2 35874c07c2c7127f3fdea868d395bbf799761abd
 git tag QQS1.3 270f574c7e8f4196b04b31979fd7645c29bd34c2
 git tag QQS1.4 a7ab8c6cd503f4500ae8705466732e61b4aeb273
 git tag QQS1.5 17b8927fcb051cea3ca0006d9ab1d9184cb90e0f
+git tag QQS1.6 c7f65f1f68c32c77ed2aadd518bfd44f4a63bdb3
 git push origin --tags
 ```
